@@ -178,7 +178,7 @@ def prepare_all():
             "fold_idx": fold_idx,
             "model_path": str(MODELS_DIR / f"{DATASET_NAME}_{MODEL_TYPE}_fold{fold_idx}.pt"),
             "n_test_graphs": len(test_graphs),
-            "test_idx": te_idx,
+            "test_idx": [int(i) for i in te_idx],
         })
 
     # Save fold metadata

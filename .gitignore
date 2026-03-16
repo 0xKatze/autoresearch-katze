@@ -1,0 +1,7 @@
+data/
+models_saved/
+results/
+best.json
+__pycache__/
+*.pyc
+.venv/

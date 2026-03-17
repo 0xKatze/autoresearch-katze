@@ -27,12 +27,12 @@ from torch_geometric.data import Data, Batch
 # ============================================================
 
 CONFIG = {
-    "feat_scale": "auto_x2",    # float or "auto" (sqrt(N)) or "auto_x2" (2*sqrt(N))
+    "feat_scale": "auto_x2",    # float or "auto" | "auto_x2" | "auto_x3"
     "sigma": 1e-3,              # ZOO smoothing parameter
     "gen_lr": 5e-3,             # generator learning rate
     "attack_epochs": 50,        # optimization steps per graph
     "grad_method": "cge",       # "rgf" or "cge"
-    "loss_type": "hybrid",      # "cw" | "cosine" | "hybrid"
+    "loss_type": "cw",           # "cw" | "cosine" | "hybrid"
     "edge_strategy": "full",    # "topk" | "spectral" | "full"
     "node_budget": 1,           # injected nodes per graph
     "kappa": -0.001,            # CW loss margin
@@ -342,6 +342,8 @@ def run_attack(model, test_graphs, device):
             fs = math.sqrt(data.num_nodes)
         elif fs == "auto_x2":
             fs = 2.0 * math.sqrt(data.num_nodes)
+        elif fs == "auto_x3":
+            fs = 3.0 * math.sqrt(data.num_nodes)
 
         if cfg["edge_strategy"] == "full":
             targets = torch.arange(data.num_nodes, device=device)

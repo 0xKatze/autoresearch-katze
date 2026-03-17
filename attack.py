@@ -35,7 +35,7 @@ CONFIG = {
     "loss_type": "cw",           # "cw" | "cosine" | "hybrid"
     "edge_strategy": "full",    # "topk" | "spectral" | "full"
     "node_budget": 1,           # injected nodes per graph
-    "kappa": -0.001,            # CW loss margin
+    "kappa": -0.1,              # CW loss margin
     "gen_hid_dim": 128,         # generator hidden dim
     "spectral_top_k_eig": 10,  # eigenvalues for spectral edge selection
 }

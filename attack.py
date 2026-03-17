@@ -27,7 +27,7 @@ from torch_geometric.data import Data, Batch
 # ============================================================
 
 CONFIG = {
-    "feat_scale": "auto",       # float or "auto" (sqrt(N))
+    "feat_scale": "auto_x2",    # float or "auto" (sqrt(N)) or "auto_x2" (2*sqrt(N))
     "sigma": 1e-3,              # ZOO smoothing parameter
     "gen_lr": 5e-3,             # generator learning rate
     "attack_epochs": 50,        # optimization steps per graph
@@ -340,6 +340,8 @@ def run_attack(model, test_graphs, device):
         fs = cfg["feat_scale"]
         if fs == "auto":
             fs = math.sqrt(data.num_nodes)
+        elif fs == "auto_x2":
+            fs = 2.0 * math.sqrt(data.num_nodes)
 
         if cfg["edge_strategy"] == "full":
             targets = torch.arange(data.num_nodes, device=device)

@@ -288,64 +288,64 @@ class SimpleGenerator(nn.Module):
 # Main attack function — called by run.py
 # ============================================================
 
-def run_attack(model, test_graphs, device):
-    """Attack test_graphs and return ASR (0.0 to 1.0).
+def _attack_single(model, data, targets, fs, cfg, n_feat, device):
+    """Single attempt to attack one graph."""
+    kappa = cfg["kappa"]
+    gen = SimpleGenerator(n_feat, cfg["gen_hid_dim"], cfg["node_budget"]).to(device)
+    opt = torch.optim.Adam(gen.parameters(), lr=cfg["gen_lr"])
 
-    This is the only function run.py calls. Everything above can be
-    freely modified by the AI agent.
-    """
+    for epoch in range(cfg["attack_epochs"]):
+        gen.train()
+        opt.zero_grad()
+        node_feats = gen(data.x)
+
+        perturbed = construct_perturbed_graph(data, node_feats, targets, fs)
+        perturbed.batch = torch.zeros(perturbed.num_nodes,
+                                      dtype=torch.long, device=device)
+        with torch.no_grad():
+            logits = model(perturbed)
+            pred = get_prediction(logits)
+        if pred != data.y.item():
+            return True
+
+        if cfg["grad_method"] == "cge":
+            _, grad = estimate_gradient_cge(
+                model, data, node_feats, targets,
+                cfg["sigma"], kappa, fs, device, cfg["loss_type"])
+        else:
+            _, grad = estimate_gradient_rgf(
+                model, data, node_feats, targets,
+                cfg["sigma"], 100, kappa, fs, device, cfg["loss_type"])
+        node_feats.backward(grad)
+        opt.step()
+    return False
+
+
+def run_attack(model, test_graphs, device):
+    """Attack with multi-restart: try N_RESTARTS random inits, succeed if any works."""
     cfg = CONFIG
     n_feat = test_graphs[0].x.size(1)
-    kappa = cfg["kappa"]
+    N_RESTARTS = 3
     n_success = 0
 
     for data in test_graphs:
         data = data.to(device)
-
-        # Compute feat_scale
         fs = cfg["feat_scale"]
         if fs == "auto":
             fs = math.sqrt(data.num_nodes)
 
-        # Edge selection
         if cfg["edge_strategy"] == "spectral":
             targets = select_targets_spectral(
                 data, cfg["node_budget"], cfg["spectral_top_k_eig"], device)
         else:
             targets = select_targets_topk(data, cfg["node_budget"])
 
-        # Init generator
-        gen = SimpleGenerator(n_feat, cfg["gen_hid_dim"], cfg["node_budget"]).to(device)
-        opt = torch.optim.Adam(gen.parameters(), lr=cfg["gen_lr"])
-
         success = False
-        for epoch in range(cfg["attack_epochs"]):
-            gen.train()
-            opt.zero_grad()
-            node_feats = gen(data.x)
-
-            # Check success
-            perturbed = construct_perturbed_graph(data, node_feats, targets, fs)
-            perturbed.batch = torch.zeros(perturbed.num_nodes,
-                                          dtype=torch.long, device=device)
-            with torch.no_grad():
-                logits = model(perturbed)
-                pred = get_prediction(logits)
-            if pred != data.y.item():
+        for restart in range(N_RESTARTS):
+            torch.manual_seed(restart * 1000 + data.num_nodes)
+            if _attack_single(model, data, targets, fs, cfg, n_feat, device):
                 success = True
                 break
-
-            # Gradient estimation
-            if cfg["grad_method"] == "cge":
-                _, grad = estimate_gradient_cge(
-                    model, data, node_feats, targets,
-                    cfg["sigma"], kappa, fs, device, cfg["loss_type"])
-            else:
-                _, grad = estimate_gradient_rgf(
-                    model, data, node_feats, targets,
-                    cfg["sigma"], 100, kappa, fs, device, cfg["loss_type"])
-            node_feats.backward(grad)
-            opt.step()
 
         if success:
             n_success += 1

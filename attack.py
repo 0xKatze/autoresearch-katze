@@ -29,7 +29,7 @@ from torch_geometric.data import Data, Batch
 CONFIG = {
     "feat_scale": "auto",       # float or "auto" (sqrt(N))
     "sigma": 1e-3,              # ZOO smoothing parameter
-    "gen_lr": 1e-4,             # generator learning rate
+    "gen_lr": 1e-3,             # generator learning rate
     "attack_epochs": 50,        # optimization steps per graph
     "grad_method": "cge",       # "rgf" or "cge"
     "loss_type": "hybrid",      # "cw" | "cosine" | "hybrid"

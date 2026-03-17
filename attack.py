@@ -336,8 +336,9 @@ def run_attack(model, test_graphs, device):
     RESTART_CONFIGS = [
         (5e-3, "cge", 50),
         (1e-2, "cge", 50),
-        (2e-2, "cge", 50),
+        (2e-2, "cge", 75),
         (5e-3, "cge", 100),
+        (1e-2, "cge", 100),
     ]
     n_success = 0
 
@@ -350,6 +351,8 @@ def run_attack(model, test_graphs, device):
             fs = 2.0 * math.sqrt(data.num_nodes)
         elif fs == "auto_x3":
             fs = 3.0 * math.sqrt(data.num_nodes)
+        elif fs == "auto_linear":
+            fs = float(data.num_nodes)
 
         if cfg["edge_strategy"] == "full":
             targets = torch.arange(data.num_nodes, device=device)

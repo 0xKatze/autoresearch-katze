@@ -33,7 +33,7 @@ CONFIG = {
     "attack_epochs": 50,        # optimization steps per graph
     "grad_method": "cge",       # "rgf" or "cge"
     "loss_type": "hybrid",      # "cw" | "cosine" | "hybrid"
-    "edge_strategy": "spectral",# "topk" | "spectral"
+    "edge_strategy": "full",    # "topk" | "spectral" | "full"
     "node_budget": 1,           # injected nodes per graph
     "kappa": -0.001,            # CW loss margin
     "gen_hid_dim": 128,         # generator hidden dim
@@ -60,11 +60,18 @@ def construct_perturbed_graph(original_data, node_feats, target_indices,
     m = node_feats.shape[0]
     scaled = node_feats * feat_scale if feat_scale != 1.0 else node_feats
     X = torch.cat([original_data.x, scaled], dim=0)
-    inj = torch.arange(n_orig, n_orig + m, device=device)
-    new_edges = torch.cat([
-        torch.stack([inj, target_indices], dim=0),
-        torch.stack([target_indices, inj], dim=0),
-    ], dim=1)
+    # Build edges: each injected node connects to all targets
+    src_list, dst_list = [], []
+    for i in range(m):
+        inj_id = n_orig + i
+        t = target_indices
+        src_list.append(torch.full((t.shape[0],), inj_id, device=device))
+        dst_list.append(t)
+        src_list.append(t)
+        dst_list.append(torch.full((t.shape[0],), inj_id, device=device))
+    new_src = torch.cat(src_list)
+    new_dst = torch.cat(dst_list)
+    new_edges = torch.stack([new_src, new_dst], dim=0)
     ei = torch.cat([original_data.edge_index, new_edges], dim=1)
     return Data(x=X, edge_index=ei, y=getattr(original_data, 'y', None))
 
@@ -334,7 +341,9 @@ def run_attack(model, test_graphs, device):
         if fs == "auto":
             fs = math.sqrt(data.num_nodes)
 
-        if cfg["edge_strategy"] == "spectral":
+        if cfg["edge_strategy"] == "full":
+            targets = torch.arange(data.num_nodes, device=device)
+        elif cfg["edge_strategy"] == "spectral":
             targets = select_targets_spectral(
                 data, cfg["node_budget"], cfg["spectral_top_k_eig"], device)
         else:

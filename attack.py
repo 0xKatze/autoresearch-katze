@@ -332,7 +332,13 @@ def run_attack(model, test_graphs, device):
     """Attack with multi-restart: try N_RESTARTS random inits, succeed if any works."""
     cfg = CONFIG
     n_feat = test_graphs[0].x.size(1)
-    LR_SCHEDULE = [5e-3, 1e-2, 2e-2]  # try different LRs across restarts
+    # (lr, grad_method, epochs) for each restart
+    RESTART_CONFIGS = [
+        (5e-3, "cge", 50),
+        (1e-2, "cge", 50),
+        (2e-2, "cge", 50),
+        (5e-3, "cge", 100),
+    ]
     n_success = 0
 
     for data in test_graphs:
@@ -354,10 +360,12 @@ def run_attack(model, test_graphs, device):
             targets = select_targets_topk(data, cfg["node_budget"])
 
         success = False
-        for restart, lr in enumerate(LR_SCHEDULE):
+        for restart, (lr, gm, ep) in enumerate(RESTART_CONFIGS):
             torch.manual_seed(restart * 1000 + data.num_nodes)
             cfg_copy = cfg.copy()
             cfg_copy["gen_lr"] = lr
+            cfg_copy["grad_method"] = gm
+            cfg_copy["attack_epochs"] = ep
             if _attack_single(model, data, targets, fs, cfg_copy, n_feat, device):
                 success = True
                 break

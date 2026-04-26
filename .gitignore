@@ -5,3 +5,13 @@ best.json
 __pycache__/
 *.pyc
 .venv/
+
+# Runtime / generated artifacts
+pipeline.log
+backups/
+charts/
+evolution/
+deliverables/
+knowledge.json
+verification_report.json
+reviews.md

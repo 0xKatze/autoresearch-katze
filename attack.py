@@ -54,6 +54,10 @@ CONFIG = {
     # swap pairs to escape coupled-edge local optima.
     "use_2swap_refinement": True,
     "swap_topk": 4,                 # K² = 16 pair evaluations per step
+    # k_sweep on stuck graphs: after default joint diffusion fails, retry with
+    # different edge cardinalities (factors of k_default = ceil(avg_deg)).
+    "use_k_sweep": True,
+    "k_sweep_factors": [0.25, 0.5, 1.5, 2.0],  # multipliers on k_default
 }
 
 # ============================================================
@@ -649,6 +653,8 @@ def run_attack(model, test_graphs, device):
     n_diffusion_success = 0
     n_joint_tried = 0
     n_joint_success = 0
+    n_ksweep_tried = 0
+    n_ksweep_success = 0
     stuck_sizes = []  # num_nodes of graphs that even joint couldn't flip
 
     for data in test_graphs:
@@ -733,6 +739,7 @@ def run_attack(model, test_graphs, device):
                     break
 
         # N24 joint diffusion (X + A_sv with cardinality budget) — last chance
+        k_default = None
         if not success and cfg.get("use_joint_diffusion", False):
             n_joint_tried += 1
             # Resolve edge_budget = avg_deg per graph (or fixed int)
@@ -740,16 +747,35 @@ def run_attack(model, test_graphs, device):
             if eb == "avg_deg":
                 avg_deg = (2.0 * data.num_edges / data.num_nodes
                            if data.num_nodes else 1.0)
-                k_budget = max(1, int(math.ceil(avg_deg)))
+                k_default = max(1, int(math.ceil(avg_deg)))
             else:
-                k_budget = int(eb)
+                k_default = int(eb)
             for seed in range(cfg["diff_n_seeds"]):
                 if _attack_joint_diffusion(
-                        model, data, fs, k_budget, cfg_per_graph, n_feat,
+                        model, data, fs, k_default, cfg_per_graph, n_feat,
                         device, seed=seed * 11 + data.num_nodes,
                         x_init=global_best_x0):
                     success = True
                     n_joint_success += 1
+                    break
+
+        # k_sweep: stuck-graph retry with alternative edge cardinalities
+        if (not success and cfg.get("use_k_sweep", False)
+                and k_default is not None):
+            n_ksweep_tried += 1
+            N = data.num_nodes
+            tried_ks = {k_default}
+            for factor in cfg["k_sweep_factors"]:
+                k_alt = max(1, min(N, int(math.ceil(factor * k_default))))
+                if k_alt in tried_ks:
+                    continue
+                tried_ks.add(k_alt)
+                if _attack_joint_diffusion(
+                        model, data, fs, k_alt, cfg_per_graph, n_feat,
+                        device, seed=int(factor * 100) + data.num_nodes,
+                        x_init=global_best_x0):
+                    success = True
+                    n_ksweep_success += 1
                     break
 
         if success:
@@ -759,7 +785,8 @@ def run_attack(model, test_graphs, device):
 
     print(f"  [hybrid] baseline solo: {n_baseline_success}, "
           f"diff tried: {n_diffusion_tried}, diff saved: {n_diffusion_success}, "
-          f"joint tried: {n_joint_tried}, joint saved: {n_joint_success}")
+          f"joint tried: {n_joint_tried}, joint saved: {n_joint_success}, "
+          f"k_sweep tried: {n_ksweep_tried}, k_sweep saved: {n_ksweep_success}")
     if stuck_sizes:
         print(f"  [stuck] {len(stuck_sizes)} graphs, num_nodes: "
               f"min={min(stuck_sizes)}, max={max(stuck_sizes)}, "

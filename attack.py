@@ -48,6 +48,10 @@ CONFIG = {
     # --- v4 joint diffusion (N24: X + A_sv with cardinality budget) ---
     "use_joint_diffusion": True,    # at restart-6, run joint X+A diffusion
     "joint_edge_budget": "avg_deg", # int or "avg_deg" — cardinality of A_sv per injected node
+    # 2-swap refinement: after 1-swap top-k projection, try top-K in × top-K out
+    # swap pairs to escape coupled-edge local optima.
+    "use_2swap_refinement": True,
+    "swap_topk": 4,                 # K² = 16 pair evaluations per step
 }
 
 # ============================================================
@@ -550,9 +554,51 @@ def _attack_joint_diffusion(model, data, fs, k_budget, cfg, n_feat,
         order = torch.argsort(edge_value, descending=True)
         n_useful = int((edge_value > 0).sum().item())
         n_keep = min(k, max(1, n_useful))
-        new_mask = torch.zeros(N, dtype=torch.bool, device=device)
-        new_mask[order[:n_keep]] = True
-        edge_mask = new_mask
+        one_swap_mask = torch.zeros(N, dtype=torch.bool, device=device)
+        one_swap_mask[order[:n_keep]] = True
+
+        # 2-swap refinement: top-K in × top-K out pair evaluations on top of
+        # the 1-swap result. Targets coupled-edge cases where the independent
+        # toggle scoring missed a beneficial in/out simultaneous swap.
+        if cfg.get("use_2swap_refinement", False):
+            K_PAIR = cfg.get("swap_topk", 4)
+            in_idx = torch.where(one_swap_mask)[0]
+            out_idx = torch.where(~one_swap_mask)[0]
+            if in_idx.numel() > 0 and out_idx.numel() > 0:
+                # Best-to-remove: in-edges with lowest edge_value
+                in_vals = edge_value[in_idx]
+                k_in = min(K_PAIR, in_idx.numel())
+                remove_cand = in_idx[torch.argsort(in_vals)[:k_in]]
+                # Best-to-add: out-edges with highest edge_value
+                out_vals = edge_value[out_idx]
+                k_out = min(K_PAIR, out_idx.numel())
+                add_cand = out_idx[torch.argsort(out_vals, descending=True)[:k_out]]
+
+                # Build candidates: the 1-swap mask itself + each pair swap
+                cand_masks = [one_swap_mask]
+                cand_graphs = [construct_perturbed_graph(
+                    data, x0_pred, torch.where(one_swap_mask)[0], fs)]
+                for i in remove_cand.tolist():
+                    for j in add_cand.tolist():
+                        tm = one_swap_mask.clone()
+                        tm[i] = False
+                        tm[j] = True
+                        tt = torch.where(tm)[0]
+                        if tt.numel() == 0:
+                            continue
+                        cand_masks.append(tm)
+                        cand_graphs.append(
+                            construct_perturbed_graph(data, x0_pred, tt, fs))
+
+                cand_losses, _ = batch_loss(
+                    model, cand_graphs, true_label, kappa, device,
+                    loss_type=cfg["loss_type"], clean_data=data)
+                best_idx = int(torch.tensor(cand_losses).argmin().item())
+                edge_mask = cand_masks[best_idx]
+            else:
+                edge_mask = one_swap_mask
+        else:
+            edge_mask = one_swap_mask
 
         # Quick re-check after edge update (cheap: 1 forward)
         new_targets = torch.where(edge_mask)[0]

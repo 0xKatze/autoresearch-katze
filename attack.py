@@ -34,7 +34,9 @@ CONFIG = {
     "grad_method": "cge",       # "rgf" or "cge"
     "loss_type": "cw",           # "cw" | "cosine" | "hybrid"
     "edge_strategy": "full",    # "topk" | "spectral" | "full"
-    "node_budget": 1,           # injected nodes per graph
+    "node_budget": 1,           # fallback if node_budget_pct is None
+    "node_budget_pct": 0.01,    # per-graph: max(floor, ceil(pct * N))
+    "node_budget_floor": 1,     # min m: tested floor=2 → -1.85pp (m=2 hurts baseline)
     "kappa": -0.1,              # CW loss margin
     "gen_hid_dim": 128,         # generator hidden dim
     "spectral_top_k_eig": 10,  # eigenvalues for spectral edge selection
@@ -647,6 +649,7 @@ def run_attack(model, test_graphs, device):
     n_diffusion_success = 0
     n_joint_tried = 0
     n_joint_success = 0
+    stuck_sizes = []  # num_nodes of graphs that even joint couldn't flip
 
     for data in test_graphs:
         data = data.to(device)
@@ -660,13 +663,22 @@ def run_attack(model, test_graphs, device):
         elif fs == "auto_linear":
             fs = float(data.num_nodes)
 
+        # Per-graph node_budget = max(floor, ceil(pct * N)). Falls back to fixed
+        # cfg["node_budget"] if node_budget_pct is None.
+        pct = cfg.get("node_budget_pct", None)
+        floor = cfg.get("node_budget_floor", 1)
+        if pct is not None:
+            nb = max(floor, math.ceil(pct * data.num_nodes))
+        else:
+            nb = cfg["node_budget"]
+
         if cfg["edge_strategy"] == "full":
             targets = torch.arange(data.num_nodes, device=device)
         elif cfg["edge_strategy"] == "spectral":
             targets = select_targets_spectral(
-                data, cfg["node_budget"], cfg["spectral_top_k_eig"], device)
+                data, nb, cfg["spectral_top_k_eig"], device)
         else:
-            targets = select_targets_topk(data, cfg["node_budget"])
+            targets = select_targets_topk(data, nb)
 
         success = False
         # Track the best x0 across all baseline restarts, for diffusion anchor
@@ -679,6 +691,7 @@ def run_attack(model, test_graphs, device):
             cfg_copy["gen_lr"] = lr
             cfg_copy["grad_method"] = gm
             cfg_copy["attack_epochs"] = ep
+            cfg_copy["node_budget"] = nb  # per-graph resolved budget
             ok, x0 = _attack_single(model, data, targets, fs, cfg_copy, n_feat, device)
             if ok:
                 success = True
@@ -702,14 +715,19 @@ def run_attack(model, test_graphs, device):
                         global_best_margin = mg
                         global_best_x0 = x0
 
+        # Pass per-graph node_budget into cfg for the restart paths
+        cfg_per_graph = cfg.copy()
+        cfg_per_graph["node_budget"] = nb
+
         # Hybrid: if all baseline restarts failed, try diffusion from best x0
         if (not success and cfg.get("use_diffusion_restart", False)
                 and global_best_x0 is not None):
             n_diffusion_tried += 1
             for seed in range(cfg["diff_n_seeds"]):
                 if _diffusion_restart(
-                        model, data, targets, fs, global_best_x0, cfg,
-                        device, seed=seed * 7 + data.num_nodes):
+                        model, data, targets, fs, global_best_x0,
+                        cfg_per_graph, device,
+                        seed=seed * 7 + data.num_nodes):
                     success = True
                     n_diffusion_success += 1
                     break
@@ -727,7 +745,7 @@ def run_attack(model, test_graphs, device):
                 k_budget = int(eb)
             for seed in range(cfg["diff_n_seeds"]):
                 if _attack_joint_diffusion(
-                        model, data, fs, k_budget, cfg, n_feat,
+                        model, data, fs, k_budget, cfg_per_graph, n_feat,
                         device, seed=seed * 11 + data.num_nodes,
                         x_init=global_best_x0):
                     success = True
@@ -736,9 +754,16 @@ def run_attack(model, test_graphs, device):
 
         if success:
             n_success += 1
+        else:
+            stuck_sizes.append(int(data.num_nodes))
 
     print(f"  [hybrid] baseline solo: {n_baseline_success}, "
           f"diff tried: {n_diffusion_tried}, diff saved: {n_diffusion_success}, "
           f"joint tried: {n_joint_tried}, joint saved: {n_joint_success}")
+    if stuck_sizes:
+        print(f"  [stuck] {len(stuck_sizes)} graphs, num_nodes: "
+              f"min={min(stuck_sizes)}, max={max(stuck_sizes)}, "
+              f"mean={sum(stuck_sizes)/len(stuck_sizes):.1f}, "
+              f"distribution: {sorted(stuck_sizes)}")
     asr = n_success / len(test_graphs) if test_graphs else 0.0
     return asr

@@ -58,6 +58,10 @@ CONFIG = {
     # different edge cardinalities (factors of k_default = ceil(avg_deg)).
     "use_k_sweep": True,
     "k_sweep_factors": [0.25, 0.5, 1.5, 2.0],  # multipliers on k_default
+    # Per-node escalation: after k_sweep fails on a graph (nb=1 case),
+    # try once more with nb=2 and per-injected-node edge masks.
+    "use_pernode_escalation": True,
+    "pernode_escalation_nb": 2,
 }
 
 # ============================================================
@@ -71,6 +75,41 @@ def get_prediction(logits):
         pred = logits.argmax(dim=-1).item()
         return pred
     return 1 if torch.sigmoid(logits).item() > 0.5 else 0
+
+
+def construct_perturbed_graph_per_node(original_data, node_feats,
+                                       target_indices_list, feat_scale=1.0):
+    """Per-injected-node target sets.
+
+    target_indices_list: list of length m, each element a 1D tensor of node
+    indices that the corresponding injected node should connect to. Allows
+    each injected node to have its own neighborhood, unlike construct_perturbed_graph
+    which shares one target tensor across all m injected nodes.
+    """
+    device = original_data.x.device
+    n_orig = original_data.num_nodes
+    m = node_feats.shape[0]
+    scaled = node_feats * feat_scale if feat_scale != 1.0 else node_feats
+    X = torch.cat([original_data.x, scaled], dim=0)
+
+    src_list, dst_list = [], []
+    for i in range(m):
+        inj_id = n_orig + i
+        t = target_indices_list[i]
+        if t.numel() == 0:
+            continue
+        src_list.append(torch.full((t.shape[0],), inj_id, device=device))
+        dst_list.append(t)
+        src_list.append(t)
+        dst_list.append(torch.full((t.shape[0],), inj_id, device=device))
+    if src_list:
+        new_src = torch.cat(src_list)
+        new_dst = torch.cat(dst_list)
+        new_edges = torch.stack([new_src, new_dst], dim=0)
+        ei = torch.cat([original_data.edge_index, new_edges], dim=1)
+    else:
+        ei = original_data.edge_index
+    return Data(x=X, edge_index=ei, y=getattr(original_data, 'y', None))
 
 
 def construct_perturbed_graph(original_data, node_feats, target_indices,
@@ -447,6 +486,187 @@ def _diffusion_restart(model, data, targets, fs, x_init, cfg, device, seed=0):
     return get_prediction(logits) != data.y.item()
 
 
+def _attack_joint_diffusion_pernode(model, data, fs, k_budget, cfg, n_feat,
+                                    device, seed=0, x_init=None):
+    """Joint diffusion with per-injected-node edge masks (m >= 2).
+
+    State per step:
+      x0_pred  ∈ R^{m × d}        — continuous, bounded DDIM + AMG
+      edge_mask ∈ {0,1}^{m × N}   — discrete, ||edge_mask[i]||_1 <= k_budget
+                                    for each injected node i independently
+
+    Each injected node has its own target set. This avoids the "duplicate
+    hubs" failure mode where m identical-target injected nodes interfere
+    through GCN message passing rather than adding adversarial diversity.
+
+    Per-step cost: m·N forwards (edge scoring) + 2·m·d forwards (CGE
+    feature gradient). m·N is the dominant term for m>=2 — 2x cost vs
+    the shared-mask version, but applies only on stuck-graph escalation.
+
+    For CGE feature scoring, the perturbed graph is built via
+    construct_perturbed_graph_per_node so the per-node target sets are
+    respected (estimate_gradient_cge is bypassed and inlined since it
+    assumes a single shared target_indices tensor).
+    """
+    torch.manual_seed(seed)
+    N = data.num_nodes
+    m = cfg["node_budget"]
+    T = cfg["diff_T_steps"]
+    kappa = cfg["kappa"]
+    true_label = data.y.item()
+    k = max(1, min(k_budget, N))
+
+    # Warm-start: each injected node gets top-k by original degree.
+    # Add a small per-node seed offset so the m nodes don't share the
+    # same exact start; using top-k for node 0, top-k shifted for node 1, etc.
+    degrees = torch.bincount(data.edge_index[0], minlength=N).float()
+    deg_order = torch.argsort(degrees, descending=True)
+    edge_mask = torch.zeros(m, N, dtype=torch.bool, device=device)
+    for i in range(m):
+        # Stagger: node 0 takes [0..k), node 1 takes [k/m..k+k/m), wrap mod N
+        offset = (i * max(1, k // m)) % N
+        idx_i = deg_order[torch.arange(k, device=device).add(offset).remainder(N)]
+        edge_mask[i, idx_i] = True
+
+    # Init x0
+    if x_init is not None and x_init.shape == (m, n_feat):
+        x0 = x_init.clone().to(device)
+    else:
+        x0 = torch.zeros(m, n_feat, device=device)
+
+    eps_0 = torch.randn(m, n_feat, device=device)
+    alphas = _make_alpha_schedule_linear(
+        T, cfg["diff_alpha_min"], cfg["diff_alpha_max"], device)
+    alpha_T = alphas[T]
+    x_t = (torch.sqrt(alpha_T) * x0
+           + torch.sqrt(1.0 - alpha_T) * eps_0)
+
+    def build_graph(x0_val, mask):
+        """Build perturbed graph from current x0 and per-node mask."""
+        tlist = [torch.where(mask[i])[0] for i in range(m)]
+        return construct_perturbed_graph_per_node(data, x0_val, tlist, fs)
+
+    for step in range(T, 0, -1):
+        alpha_bar_t = alphas[step]
+        alpha_bar_prev = alphas[step - 1]
+        x0_pred = _ddim_predict_x0(x_t, eps_0, alpha_bar_t)
+
+        # Quick check at current state
+        perturbed = build_graph(x0_pred, edge_mask)
+        perturbed.batch = torch.zeros(perturbed.num_nodes,
+                                      dtype=torch.long, device=device)
+        with torch.no_grad():
+            cur_logits = model(perturbed)
+        if get_prediction(cur_logits) != true_label:
+            return True
+
+        cur_margin = _logit_margin(cur_logits, true_label, device)
+
+        # Per-node edge scoring: m * N toggle evaluations, batched by row
+        for inj_i in range(m):
+            edge_value = torch.full((N,), -1e9, device=device)
+            toggle_data = []
+            valid_j = []
+            for j in range(N):
+                new_mask = edge_mask.clone()
+                new_mask[inj_i, j] = ~new_mask[inj_i, j]
+                if new_mask[inj_i].sum() == 0:
+                    # Allow temporarily but skip — will be re-filled via projection
+                    continue
+                toggle_data.append(build_graph(x0_pred, new_mask))
+                valid_j.append(j)
+            if toggle_data:
+                losses, _ = batch_loss(
+                    model, toggle_data, true_label, kappa, device,
+                    loss_type=cfg["loss_type"], clean_data=data)
+                for j, loss_after in zip(valid_j, losses):
+                    if edge_mask[inj_i, j].item():
+                        edge_value[j] = loss_after - cur_margin
+                    else:
+                        edge_value[j] = cur_margin - loss_after
+
+            # Project this row: up to k positive-value edges, floor 1
+            order = torch.argsort(edge_value, descending=True)
+            n_useful = int((edge_value > 0).sum().item())
+            n_keep = min(k, max(1, n_useful))
+            row_mask = torch.zeros(N, dtype=torch.bool, device=device)
+            row_mask[order[:n_keep]] = True
+            edge_mask[inj_i] = row_mask
+
+            # 2-swap refinement on this row (cheap)
+            if cfg.get("use_2swap_refinement", False):
+                K_PAIR = cfg.get("swap_topk", 4)
+                in_idx = torch.where(row_mask)[0]
+                out_idx = torch.where(~row_mask)[0]
+                if in_idx.numel() > 0 and out_idx.numel() > 0:
+                    in_vals = edge_value[in_idx]
+                    k_in = min(K_PAIR, in_idx.numel())
+                    remove_cand = in_idx[torch.argsort(in_vals)[:k_in]]
+                    out_vals = edge_value[out_idx]
+                    k_out = min(K_PAIR, out_idx.numel())
+                    add_cand = out_idx[
+                        torch.argsort(out_vals, descending=True)[:k_out]]
+                    cand_masks = [edge_mask.clone()]
+                    cand_graphs = [build_graph(x0_pred, cand_masks[0])]
+                    for i_rm in remove_cand.tolist():
+                        for j_add in add_cand.tolist():
+                            tm = edge_mask.clone()
+                            tm[inj_i, i_rm] = False
+                            tm[inj_i, j_add] = True
+                            if tm[inj_i].sum() == 0:
+                                continue
+                            cand_masks.append(tm)
+                            cand_graphs.append(build_graph(x0_pred, tm))
+                    cand_losses, _ = batch_loss(
+                        model, cand_graphs, true_label, kappa, device,
+                        loss_type=cfg["loss_type"], clean_data=data)
+                    best_idx = int(torch.tensor(cand_losses).argmin().item())
+                    edge_mask = cand_masks[best_idx]
+
+        # Quick re-check after edge update
+        perturbed = build_graph(x0_pred, edge_mask)
+        perturbed.batch = torch.zeros(perturbed.num_nodes,
+                                      dtype=torch.long, device=device)
+        with torch.no_grad():
+            logits2 = model(perturbed)
+        if get_prediction(logits2) != true_label:
+            return True
+
+        # Feature ZO score: CGE on x0 with per-node mask graph builder
+        sigma = cfg["sigma"]
+        x0_det = x0_pred.detach()
+        feature_data = []
+        for inj_i in range(m):
+            for j_feat in range(n_feat):
+                e = torch.zeros_like(x0_det)
+                e[inj_i, j_feat] = 1.0
+                feature_data.append(build_graph(x0_det + sigma * e, edge_mask))
+                feature_data.append(build_graph(x0_det - sigma * e, edge_mask))
+        feat_losses, _ = batch_loss(
+            model, feature_data, true_label, kappa, device,
+            loss_type=cfg["loss_type"], clean_data=data)
+        score = torch.zeros_like(x0_det)
+        idx = 0
+        for inj_i in range(m):
+            for j_feat in range(n_feat):
+                score[inj_i, j_feat] = (
+                    feat_losses[idx] - feat_losses[idx + 1]) / (2 * sigma)
+                idx += 2
+
+        eps_hat = (eps_0
+                   - cfg["diff_guidance"]
+                   * torch.sqrt(1.0 - alpha_bar_t) * score)
+        x_t = _ddim_step(x_t, eps_hat, alpha_bar_t, alpha_bar_prev)
+
+    # Final check
+    perturbed = build_graph(x_t, edge_mask)
+    perturbed.batch = torch.zeros(perturbed.num_nodes,
+                                  dtype=torch.long, device=device)
+    with torch.no_grad():
+        logits = model(perturbed)
+    return get_prediction(logits) != true_label
+
+
 def _logit_margin(logits, true_label, device):
     """Unclamped CW margin: true_logit - max_other. Lower (more negative) = flip."""
     lv = logits.unsqueeze(0) if logits.dim() == 1 else logits
@@ -655,6 +875,8 @@ def run_attack(model, test_graphs, device):
     n_joint_success = 0
     n_ksweep_tried = 0
     n_ksweep_success = 0
+    n_pernode_tried = 0
+    n_pernode_success = 0
     stuck_sizes = []  # num_nodes of graphs that even joint couldn't flip
 
     for data in test_graphs:
@@ -778,6 +1000,24 @@ def run_attack(model, test_graphs, device):
                     n_ksweep_success += 1
                     break
 
+        # Per-node escalation: try nb=2 with independent edge masks on the
+        # remaining stuck graphs. global_best_x0 has shape (nb_baseline, d),
+        # not (2, d), so pass None (zero init).
+        if (not success and cfg.get("use_pernode_escalation", False)
+                and k_default is not None):
+            n_pernode_tried += 1
+            esc_nb = cfg.get("pernode_escalation_nb", 2)
+            cfg_esc = cfg_per_graph.copy()
+            cfg_esc["node_budget"] = esc_nb
+            for seed in range(cfg["diff_n_seeds"]):
+                if _attack_joint_diffusion_pernode(
+                        model, data, fs, k_default, cfg_esc, n_feat,
+                        device, seed=seed * 13 + data.num_nodes,
+                        x_init=None):
+                    success = True
+                    n_pernode_success += 1
+                    break
+
         if success:
             n_success += 1
         else:
@@ -786,7 +1026,8 @@ def run_attack(model, test_graphs, device):
     print(f"  [hybrid] baseline solo: {n_baseline_success}, "
           f"diff tried: {n_diffusion_tried}, diff saved: {n_diffusion_success}, "
           f"joint tried: {n_joint_tried}, joint saved: {n_joint_success}, "
-          f"k_sweep tried: {n_ksweep_tried}, k_sweep saved: {n_ksweep_success}")
+          f"k_sweep tried: {n_ksweep_tried}, k_sweep saved: {n_ksweep_success}, "
+          f"pernode tried: {n_pernode_tried}, pernode saved: {n_pernode_success}")
     if stuck_sizes:
         print(f"  [stuck] {len(stuck_sizes)} graphs, num_nodes: "
               f"min={min(stuck_sizes)}, max={max(stuck_sizes)}, "

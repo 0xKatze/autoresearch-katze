@@ -38,13 +38,6 @@ CONFIG = {
     "kappa": -0.1,              # CW loss margin
     "gen_hid_dim": 128,         # generator hidden dim
     "spectral_top_k_eig": 10,  # eigenvalues for spectral edge selection
-    # --- v3 hybrid (diffusion-as-restart) ---
-    "use_diffusion_restart": True,  # if all baseline restarts fail, try DDIM
-    "diff_T_steps": 20,             # short bounded trajectory
-    "diff_alpha_min": 0.5,
-    "diff_alpha_max": 0.99,
-    "diff_guidance": 2.0,           # score guidance strength
-    "diff_n_seeds": 2,              # multi-restart on the diffusion step itself
 }
 
 # ============================================================
@@ -303,19 +296,10 @@ class SimpleGenerator(nn.Module):
 # ============================================================
 
 def _attack_single(model, data, targets, fs, cfg, n_feat, device):
-    """Single attempt to attack one graph.
-
-    Returns (success: bool, best_x0: Tensor | None) — best_x0 is the
-    generator output with the lowest CW margin observed across epochs,
-    used by the hybrid diffusion restart as a non-zero anchor.
-    """
+    """Single attempt to attack one graph."""
     kappa = cfg["kappa"]
     gen = SimpleGenerator(n_feat, cfg["gen_hid_dim"], cfg["node_budget"]).to(device)
     opt = torch.optim.Adam(gen.parameters(), lr=cfg["gen_lr"])
-
-    best_x0 = None
-    best_margin = float("inf")
-    true_label = data.y.item()
 
     for epoch in range(cfg["attack_epochs"]):
         gen.train()
@@ -328,24 +312,8 @@ def _attack_single(model, data, targets, fs, cfg, n_feat, device):
         with torch.no_grad():
             logits = model(perturbed)
             pred = get_prediction(logits)
-
-        # Track best x0 by CW margin (lower = closer to flipping)
-        if logits.dim() == 1:
-            lvec = logits.unsqueeze(0)
-        else:
-            lvec = logits
-        if lvec.size(-1) > 1:
-            true_l = lvec[0, true_label].item()
-            mask = torch.ones(lvec.size(-1), dtype=torch.bool, device=device)
-            mask[true_label] = False
-            max_other = lvec[0, mask].max().item()
-            margin = true_l - max_other
-            if margin < best_margin:
-                best_margin = margin
-                best_x0 = node_feats.detach().clone()
-
-        if pred != true_label:
-            return True, best_x0
+        if pred != data.y.item():
+            return True
 
         if cfg["grad_method"] == "cge":
             _, grad = estimate_gradient_cge(
@@ -357,81 +325,7 @@ def _attack_single(model, data, targets, fs, cfg, n_feat, device):
                 cfg["sigma"], 100, kappa, fs, device, cfg["loss_type"])
         node_feats.backward(grad)
         opt.step()
-    return False, best_x0
-
-
-# ============================================================
-# Hybrid diffusion-as-restart (Option B / N23-v3)
-# ============================================================
-
-def _make_alpha_schedule_linear(T, alpha_min, alpha_max, device):
-    """Bounded linear alpha schedule, t=0 clean, t=T noisy."""
-    return torch.linspace(alpha_max, alpha_min, T + 1, device=device)
-
-
-def _ddim_predict_x0(x_t, eps, alpha_bar_t):
-    return (x_t - torch.sqrt(1.0 - alpha_bar_t) * eps) / torch.sqrt(alpha_bar_t)
-
-
-def _ddim_step(x_t, eps_pred, alpha_bar_t, alpha_bar_prev):
-    x0 = _ddim_predict_x0(x_t, eps_pred, alpha_bar_t)
-    return (torch.sqrt(alpha_bar_prev) * x0
-            + torch.sqrt(1.0 - alpha_bar_prev) * eps_pred)
-
-
-def _diffusion_restart(model, data, targets, fs, x_init, cfg, device, seed=0):
-    """AdvAD-style bounded DDIM anchored at x_init (best baseline guess).
-
-    Forward:   x_T = sqrt(alpha_T) * x_init + sqrt(1 - alpha_T) * eps_0
-    Reverse:   each step t, ZO estimate score = grad_x0 CW; update eps_hat per
-               AMG: eps_hat = eps_0 - guidance * sqrt(1 - alpha_t) * score;
-               DDIM transition to x_{t-1}; quick-check x0_pred for flip.
-
-    Different from N23-v1/v2 because x_init != 0 — the trajectory has a
-    meaningful anchor so the ZO score has somewhere to denoise toward and
-    away from. Returns True if any intermediate x0 flips the prediction.
-    """
-    torch.manual_seed(seed)
-    T = cfg["diff_T_steps"]
-    kappa = cfg["kappa"]
-
-    alphas = _make_alpha_schedule_linear(
-        T, cfg["diff_alpha_min"], cfg["diff_alpha_max"], device)
-    eps_0 = torch.randn_like(x_init)
-    alpha_T = alphas[T]
-    x_t = (torch.sqrt(alpha_T) * x_init
-           + torch.sqrt(1.0 - alpha_T) * eps_0)
-
-    for step in range(T, 0, -1):
-        alpha_bar_t = alphas[step]
-        alpha_bar_prev = alphas[step - 1]
-        x0_pred = _ddim_predict_x0(x_t, eps_0, alpha_bar_t)
-
-        # Quick success check
-        perturbed = construct_perturbed_graph(data, x0_pred, targets, fs)
-        perturbed.batch = torch.zeros(perturbed.num_nodes,
-                                      dtype=torch.long, device=device)
-        with torch.no_grad():
-            logits = model(perturbed)
-        if get_prediction(logits) != data.y.item():
-            return True
-
-        # ZO CGE score at x0_pred (gradient of CW w.r.t. x0)
-        _, score = estimate_gradient_cge(
-            model, data, x0_pred, targets,
-            cfg["sigma"], kappa, fs, device, cfg["loss_type"])
-
-        # AMG (CW minimization → subtract score)
-        eps_hat = eps_0 - cfg["diff_guidance"] * torch.sqrt(1.0 - alpha_bar_t) * score
-        x_t = _ddim_step(x_t, eps_hat, alpha_bar_t, alpha_bar_prev)
-
-    # Final check
-    perturbed = construct_perturbed_graph(data, x_t, targets, fs)
-    perturbed.batch = torch.zeros(perturbed.num_nodes,
-                                  dtype=torch.long, device=device)
-    with torch.no_grad():
-        logits = model(perturbed)
-    return get_prediction(logits) != data.y.item()
+    return False
 
 
 def run_attack(model, test_graphs, device):
@@ -447,9 +341,6 @@ def run_attack(model, test_graphs, device):
         (1e-2, "cge", 100),
     ]
     n_success = 0
-    n_baseline_success = 0
-    n_diffusion_tried = 0
-    n_diffusion_success = 0
 
     for data in test_graphs:
         data = data.to(device)
@@ -472,55 +363,18 @@ def run_attack(model, test_graphs, device):
             targets = select_targets_topk(data, cfg["node_budget"])
 
         success = False
-        # Track the best x0 across all baseline restarts, for diffusion anchor
-        global_best_x0 = None
-        global_best_margin = float("inf")
-
         for restart, (lr, gm, ep) in enumerate(RESTART_CONFIGS):
             torch.manual_seed(restart * 1000 + data.num_nodes)
             cfg_copy = cfg.copy()
             cfg_copy["gen_lr"] = lr
             cfg_copy["grad_method"] = gm
             cfg_copy["attack_epochs"] = ep
-            ok, x0 = _attack_single(model, data, targets, fs, cfg_copy, n_feat, device)
-            if ok:
+            if _attack_single(model, data, targets, fs, cfg_copy, n_feat, device):
                 success = True
-                n_baseline_success += 1
                 break
-            if x0 is not None:
-                # Re-evaluate this x0's margin to compare across restarts
-                p = construct_perturbed_graph(data, x0, targets, fs)
-                p.batch = torch.zeros(p.num_nodes, dtype=torch.long, device=device)
-                with torch.no_grad():
-                    lg = model(p)
-                if lg.dim() == 1:
-                    lg = lg.unsqueeze(0)
-                if lg.size(-1) > 1:
-                    tl = lg[0, data.y.item()].item()
-                    mk = torch.ones(lg.size(-1), dtype=torch.bool, device=device)
-                    mk[data.y.item()] = False
-                    mo = lg[0, mk].max().item()
-                    mg = tl - mo
-                    if mg < global_best_margin:
-                        global_best_margin = mg
-                        global_best_x0 = x0
-
-        # Hybrid: if all baseline restarts failed, try diffusion from best x0
-        if (not success and cfg.get("use_diffusion_restart", False)
-                and global_best_x0 is not None):
-            n_diffusion_tried += 1
-            for seed in range(cfg["diff_n_seeds"]):
-                if _diffusion_restart(
-                        model, data, targets, fs, global_best_x0, cfg,
-                        device, seed=seed * 7 + data.num_nodes):
-                    success = True
-                    n_diffusion_success += 1
-                    break
 
         if success:
             n_success += 1
 
-    print(f"  [hybrid] baseline solo: {n_baseline_success}, "
-          f"diffusion tried: {n_diffusion_tried}, diffusion saved: {n_diffusion_success}")
     asr = n_success / len(test_graphs) if test_graphs else 0.0
     return asr

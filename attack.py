@@ -45,6 +45,9 @@ CONFIG = {
     "diff_alpha_max": 0.99,
     "diff_guidance": 2.0,           # score guidance strength
     "diff_n_seeds": 2,              # multi-restart on the diffusion step itself
+    # --- v4 joint diffusion (N24: X + A_sv with cardinality budget) ---
+    "use_joint_diffusion": True,    # at restart-6, run joint X+A diffusion
+    "joint_edge_budget": "avg_deg", # int or "avg_deg" — cardinality of A_sv per injected node
 }
 
 # ============================================================
@@ -434,6 +437,146 @@ def _diffusion_restart(model, data, targets, fs, x_init, cfg, device, seed=0):
     return get_prediction(logits) != data.y.item()
 
 
+def _logit_margin(logits, true_label, device):
+    """Unclamped CW margin: true_logit - max_other. Lower (more negative) = flip."""
+    lv = logits.unsqueeze(0) if logits.dim() == 1 else logits
+    true_l = lv[0, true_label]
+    mask = torch.ones(lv.size(-1), dtype=torch.bool, device=device)
+    mask[true_label] = False
+    return (true_l - lv[0, mask].max()).item()
+
+
+def _attack_joint_diffusion(model, data, fs, k_budget, cfg, n_feat,
+                            device, seed=0, x_init=None):
+    """N24 — joint diffusion over (X_inj, A_sv) with cardinality budget on A_sv.
+
+    State per step:
+      x0_pred ∈ R^{m × d}        — continuous, evolves via bounded DDIM + AMG
+      edge_mask ∈ {0,1}^N        — discrete, ||·||_1 = k_budget, evolves via greedy
+                                   one-edge-toggle scoring + top-k projection
+
+    Per-step cost: N forwards (edge scoring) + 2·m·d forwards (CGE feature score).
+    Total per graph: T_steps × (N + 2·m·d) victim queries.
+
+    Initialization:
+      edge_mask = top-k by original-graph degree (warm start; known good init
+                  for injection-attack edge selection)
+      x0        = x_init (e.g., baseline best-margin guess) or zeros
+    """
+    torch.manual_seed(seed)
+    N = data.num_nodes
+    m = cfg["node_budget"]
+    T = cfg["diff_T_steps"]
+    kappa = cfg["kappa"]
+    true_label = data.y.item()
+    k = max(1, min(k_budget, N))
+
+    # Warm-start edge mask: top-k by degree
+    degrees = torch.bincount(data.edge_index[0], minlength=N).float()
+    top_idx = torch.topk(degrees, k=k).indices
+    edge_mask = torch.zeros(N, dtype=torch.bool, device=device)
+    edge_mask[top_idx] = True
+
+    # Init x0
+    if x_init is not None and x_init.shape == (m, n_feat):
+        x0 = x_init.clone().to(device)
+    else:
+        x0 = torch.zeros(m, n_feat, device=device)
+
+    eps_0 = torch.randn(m, n_feat, device=device)
+    alphas = _make_alpha_schedule_linear(
+        T, cfg["diff_alpha_min"], cfg["diff_alpha_max"], device)
+    alpha_T = alphas[T]
+    x_t = (torch.sqrt(alpha_T) * x0
+           + torch.sqrt(1.0 - alpha_T) * eps_0)
+
+    for step in range(T, 0, -1):
+        alpha_bar_t = alphas[step]
+        alpha_bar_prev = alphas[step - 1]
+        x0_pred = _ddim_predict_x0(x_t, eps_0, alpha_bar_t)
+
+        # Current targets from mask
+        cur_targets = torch.where(edge_mask)[0]
+        if cur_targets.numel() == 0:
+            # Should not happen (we init with k>=1), but guard
+            edge_mask[top_idx[0]] = True
+            cur_targets = torch.where(edge_mask)[0]
+
+        # Quick check at current state
+        perturbed = construct_perturbed_graph(data, x0_pred, cur_targets, fs)
+        perturbed.batch = torch.zeros(perturbed.num_nodes,
+                                      dtype=torch.long, device=device)
+        with torch.no_grad():
+            cur_logits = model(perturbed)
+        if get_prediction(cur_logits) != true_label:
+            return True
+
+        # Edge score: toggle each of N edges, evaluate, project to top-k
+        cur_margin = _logit_margin(cur_logits, true_label, device)
+        edge_value = torch.full((N,), -1e9, device=device)  # higher = better to be IN
+
+        toggle_data = []
+        valid_j = []
+        for j in range(N):
+            new_mask = edge_mask.clone()
+            new_mask[j] = ~new_mask[j]
+            new_targets = torch.where(new_mask)[0]
+            if new_targets.numel() == 0:
+                continue
+            toggle_data.append(
+                construct_perturbed_graph(data, x0_pred, new_targets, fs))
+            valid_j.append(j)
+
+        if toggle_data:
+            losses, _ = batch_loss(
+                model, toggle_data, true_label, kappa, device,
+                loss_type=cfg["loss_type"], clean_data=data)
+            for j, loss_after in zip(valid_j, losses):
+                # value of edge j being IN the mask:
+                #   was-in (mask[j]=1, toggle removes): value = loss_without - cw_current
+                #     (positive: removing it hurts → it's useful)
+                #   was-out (mask[j]=0, toggle adds): value = cw_current - loss_with
+                #     (positive: adding it helps → it should be in)
+                if edge_mask[j].item():
+                    edge_value[j] = loss_after - cur_margin
+                else:
+                    edge_value[j] = cur_margin - loss_after
+
+        # Project: top-k by edge_value
+        new_indices = torch.topk(edge_value, k=k).indices
+        new_mask = torch.zeros(N, dtype=torch.bool, device=device)
+        new_mask[new_indices] = True
+        edge_mask = new_mask
+
+        # Quick re-check after edge update (cheap: 1 forward)
+        new_targets = torch.where(edge_mask)[0]
+        perturbed = construct_perturbed_graph(data, x0_pred, new_targets, fs)
+        perturbed.batch = torch.zeros(perturbed.num_nodes,
+                                      dtype=torch.long, device=device)
+        with torch.no_grad():
+            logits2 = model(perturbed)
+        if get_prediction(logits2) != true_label:
+            return True
+
+        # Feature ZO score under updated mask
+        _, score = estimate_gradient_cge(
+            model, data, x0_pred, new_targets,
+            cfg["sigma"], kappa, fs, device, cfg["loss_type"])
+        eps_hat = (eps_0
+                   - cfg["diff_guidance"]
+                   * torch.sqrt(1.0 - alpha_bar_t) * score)
+        x_t = _ddim_step(x_t, eps_hat, alpha_bar_t, alpha_bar_prev)
+
+    # Final check
+    final_targets = torch.where(edge_mask)[0]
+    perturbed = construct_perturbed_graph(data, x_t, final_targets, fs)
+    perturbed.batch = torch.zeros(perturbed.num_nodes,
+                                  dtype=torch.long, device=device)
+    with torch.no_grad():
+        logits = model(perturbed)
+    return get_prediction(logits) != true_label
+
+
 def run_attack(model, test_graphs, device):
     """Attack with multi-restart: try N_RESTARTS random inits, succeed if any works."""
     cfg = CONFIG
@@ -450,6 +593,8 @@ def run_attack(model, test_graphs, device):
     n_baseline_success = 0
     n_diffusion_tried = 0
     n_diffusion_success = 0
+    n_joint_tried = 0
+    n_joint_success = 0
 
     for data in test_graphs:
         data = data.to(device)
@@ -517,10 +662,31 @@ def run_attack(model, test_graphs, device):
                     n_diffusion_success += 1
                     break
 
+        # N24 joint diffusion (X + A_sv with cardinality budget) — last chance
+        if not success and cfg.get("use_joint_diffusion", False):
+            n_joint_tried += 1
+            # Resolve edge_budget = avg_deg per graph (or fixed int)
+            eb = cfg["joint_edge_budget"]
+            if eb == "avg_deg":
+                avg_deg = (2.0 * data.num_edges / data.num_nodes
+                           if data.num_nodes else 1.0)
+                k_budget = max(1, int(math.ceil(avg_deg)))
+            else:
+                k_budget = int(eb)
+            for seed in range(cfg["diff_n_seeds"]):
+                if _attack_joint_diffusion(
+                        model, data, fs, k_budget, cfg, n_feat,
+                        device, seed=seed * 11 + data.num_nodes,
+                        x_init=global_best_x0):
+                    success = True
+                    n_joint_success += 1
+                    break
+
         if success:
             n_success += 1
 
     print(f"  [hybrid] baseline solo: {n_baseline_success}, "
-          f"diffusion tried: {n_diffusion_tried}, diffusion saved: {n_diffusion_success}")
+          f"diff tried: {n_diffusion_tried}, diff saved: {n_diffusion_success}, "
+          f"joint tried: {n_joint_tried}, joint saved: {n_joint_success}")
     asr = n_success / len(test_graphs) if test_graphs else 0.0
     return asr

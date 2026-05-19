@@ -40,11 +40,11 @@ CONFIG = {
     "spectral_top_k_eig": 10,  # eigenvalues for spectral edge selection
     # --- v3 hybrid (diffusion-as-restart) ---
     "use_diffusion_restart": True,  # if all baseline restarts fail, try DDIM
-    "diff_T_steps": 20,             # short bounded trajectory
+    "diff_T_steps": 20,             # T=40 tested: identical result, reverted (saturated)
     "diff_alpha_min": 0.5,
     "diff_alpha_max": 0.99,
     "diff_guidance": 2.0,           # score guidance strength
-    "diff_n_seeds": 2,              # multi-restart on the diffusion step itself
+    "diff_n_seeds": 2,              # n=5 tested: identical result, reverted (saturated)
     # --- v4 joint diffusion (N24: X + A_sv with cardinality budget) ---
     "use_joint_diffusion": True,    # at restart-6, run joint X+A diffusion
     "joint_edge_budget": "avg_deg", # int or "avg_deg" — cardinality of A_sv per injected node
@@ -452,8 +452,10 @@ def _attack_joint_diffusion(model, data, fs, k_budget, cfg, n_feat,
 
     State per step:
       x0_pred ∈ R^{m × d}        — continuous, evolves via bounded DDIM + AMG
-      edge_mask ∈ {0,1}^N        — discrete, ||·||_1 = k_budget, evolves via greedy
-                                   one-edge-toggle scoring + top-k projection
+      edge_mask ∈ {0,1}^N        — discrete, ||·||_1 <= k_budget, evolves via
+                                   greedy one-edge-toggle scoring; projection
+                                   keeps only edges with positive marginal
+                                   value, floored at 1, capped at k_budget
 
     Per-step cost: N forwards (edge scoring) + 2·m·d forwards (CGE feature score).
     Total per graph: T_steps × (N + 2·m·d) victim queries.
@@ -542,10 +544,14 @@ def _attack_joint_diffusion(model, data, fs, k_budget, cfg, n_feat,
                 else:
                     edge_value[j] = cur_margin - loss_after
 
-        # Project: top-k by edge_value
-        new_indices = torch.topk(edge_value, k=k).indices
+        # Project: keep only edges with positive value (genuinely helpful),
+        # up to the cardinality budget k. Floor at 1 to keep the injection
+        # connected. This makes k a true upper bound, not an equality.
+        order = torch.argsort(edge_value, descending=True)
+        n_useful = int((edge_value > 0).sum().item())
+        n_keep = min(k, max(1, n_useful))
         new_mask = torch.zeros(N, dtype=torch.bool, device=device)
-        new_mask[new_indices] = True
+        new_mask[order[:n_keep]] = True
         edge_mask = new_mask
 
         # Quick re-check after edge update (cheap: 1 forward)

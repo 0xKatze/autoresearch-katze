@@ -1,0 +1,34 @@
+{
+  "timestamp": "20260519_134043",
+  "attack_hash": "54aeadf4",
+  "config": {
+    "T_steps": 50,
+    "schedule": "cosine",
+    "alpha_min": 0.001,
+    "alpha_max": 0.999,
+    "sigma": 0.005,
+    "grad_method": "cge",
+    "rgf_samples": 20,
+    "guidance_scale": 1.0,
+    "predict_x0": true,
+    "use_AdvAD_X": false,
+    "dgi_skip_threshold": 0.01,
+    "feat_scale": "auto_x2",
+    "loss_type": "cw",
+    "kappa": -0.1,
+    "edge_strategy": "full",
+    "node_budget": 1,
+    "spectral_top_k_eig": 10,
+    "n_restarts": 3
+  },
+  "mean_asr": 0.6731,
+  "std_asr": 0.0,
+  "per_fold_asr": [
+    0.6731
+  ],
+  "total_success": 105,
+  "total_attacked": 156,
+  "wall_time_s": 38.58,
+  "n_folds": 1,
+  "git_diff": "diff --git a/attack.py b/attack.py\nindex cc101ed..084ba16 100644\n--- a/attack.py\n+++ b/attack.py\n@@ -1,349 +1,292 @@\n #!/usr/bin/env python3\n \"\"\"\n-attack.py \u2014 THE FILE AI AGENTS MODIFY\n-\n-This file contains the full attack pipeline. The AI agent can modify:\n-- Attack hyperparameters (feat_scale, sigma, lr, etc.)\n-- Gradient estimation method\n-- Loss function\n-- Edge selection strategy\n-- Feature generation logic\n-- Any other attack logic\n-\n-Rules:\n-1. Must define `run_attack(model, test_graphs, device) -> float` returning ASR\n-2. Must be runnable in < 5 minutes for a single fold\n-3. All changes are tracked via git\n+attack_diffusion.py \u2014 N23 DiSGIA-NoParam (AdvAD-style non-parametric diffusion)\n+\n+Drop-in replacement for attack.py with the same run_attack(model, test_graphs, device) -> float\n+signature, so run.py / executor.py work unchanged.\n+\n+Core idea (Li et al., NeurIPS 2024, arXiv:2503.09124):\n+  Cast the attack itself as a non-parametric discrete-time diffusion process.\n+  Forward:   F_s_T  = sqrt(1 - alpha_T) * eps_0          (pure noise; alpha_T -> 0)\n+  Reverse:   each step t, denoise via ZO-estimated score of CW loss on victim:\n+             eps_hat_t = eps_0 - sqrt(1 - alpha_t) * grad_x0 (CW)\n+             then DDIM transition to F_s_{t-1}.\n+\n+Key differences vs attack.py (baseline KATZE):\n+  - No generator network. F_s evolves directly under reverse diffusion.\n+  - No Adam. Updates are deterministic DDIM transitions + ZO score.\n+  - Annealed noise schedule (high beta early -> explore; low beta late -> exploit).\n+\n+Injection-only invariant (Proposition 3.1 from N23 design):\n+  construct_perturbed_graph() is pure: original_data passed in, new Data returned.\n+  G is never mutated. F_s lives outside the original feature block.\n+  Edge additions only between injected nodes and existing nodes (or among injected).\n \"\"\"\n \n import math\n import torch\n import torch.nn.functional as F\n import numpy as np\n-from torch_geometric.data import Data, Batch\n+\n+# Reuse helpe"
+}

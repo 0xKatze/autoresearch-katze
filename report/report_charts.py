@@ -195,7 +195,7 @@ def chart_robustness():
     ax.set_yticks(y)
     ax.set_yticklabels(archs, fontsize=11)
     ax.set_xlabel("Attack Success Rate (%)")
-    ax.set_xlim(0, 105)
+    ax.set_xlim(0, 113)
     ax.set_title("Transferability: Mean-Pool is the Attack Surface")
     legend = [Patch(facecolor=CRIMSON, label="Vulnerable (mean-pool)"),
               Patch(facecolor=GREEN, label="Resistant (median-pool)")]

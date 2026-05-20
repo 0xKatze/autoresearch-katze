@@ -94,24 +94,27 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 7, offset: 3, angl
   function chip(s, x, y, w, h, iconData, title, body, accent) {
     s.addShape(pres.shapes.RECTANGLE, { x, y, w, h, fill: { color: WHITE }, shadow: shadow() });
     s.addShape(pres.shapes.RECTANGLE, { x, y, w: 0.09, h, fill: { color: accent } });
-    s.addShape(pres.shapes.OVAL, { x: x + 0.28, y: y + 0.28, w: 0.62, h: 0.62, fill: { color: accent } });
-    s.addImage({ data: iconData, x: x + 0.41, y: y + 0.41, w: 0.36, h: 0.36 });
-    s.addText(title, { x: x + 1.08, y: y + 0.26, w: w - 1.25, h: 0.4, fontFace: HEAD,
+    // circle vertically centered in card
+    const cd = 0.62, cy = y + (h - cd) / 2;
+    s.addShape(pres.shapes.OVAL, { x: x + 0.28, y: cy, w: cd, h: cd, fill: { color: accent } });
+    s.addImage({ data: iconData, x: x + 0.41, y: cy + 0.13, w: 0.36, h: 0.36 });
+    // title + body stacked, vertically centered as a block
+    s.addText(title, { x: x + 1.08, y: y + 0.22, w: w - 1.3, h: 0.4, fontFace: HEAD,
       fontSize: 15, bold: true, color: INK, margin: 0, valign: "middle" });
-    s.addText(body, { x: x + 1.08, y: y + 0.66, w: w - 1.25, h: h - 0.8, fontFace: BODY,
-      fontSize: 11.5, color: "44485E", margin: 0, valign: "top" });
+    s.addText(body, { x: x + 1.08, y: y + 0.62, w: w - 1.3, h: h - 0.82, fontFace: BODY,
+      fontSize: 11.5, color: "44485E", margin: 0, valign: "top", lineSpacingMultiple: 1.02 });
   }
 
   // ============================================================
   // SLIDE 1 — Title (dark)
   // ============================================================
   let s = pres.addSlide(); bgDark(s);
-  // motif: faint nodes
+  // motif: faint node-graph cluster (top-right), lines drawn first so nodes sit on top
+  s.addShape(pres.shapes.LINE, { x: 11.85, y: 1.55, w: 0.6, h: 1.0, line: { color: TEAL, width: 1.5, transparency: 55 } });
+  s.addShape(pres.shapes.LINE, { x: 10.95, y: 2.55, w: 0.95, h: -0.45, line: { color: GOLD, width: 1.5, transparency: 55 } });
   s.addShape(pres.shapes.OVAL, { x: 11.0, y: 0.7, w: 1.7, h: 1.7, fill: { color: TEAL, transparency: 60 } });
   s.addShape(pres.shapes.OVAL, { x: 12.0, y: 2.1, w: 0.9, h: 0.9, fill: { color: CRIMSON, transparency: 45 } });
   s.addShape(pres.shapes.OVAL, { x: 10.4, y: 2.3, w: 0.55, h: 0.55, fill: { color: GOLD, transparency: 40 } });
-  s.addShape(pres.shapes.LINE, { x: 10.95, y: 2.55, w: 1.45, h: -0.3, line: { color: TEAL, width: 1.5, transparency: 40 } });
-  s.addShape(pres.shapes.LINE, { x: 11.85, y: 1.55, w: 0.6, h: 1.0, line: { color: GOLD, width: 1.5, transparency: 40 } });
 
   s.addImage({ data: ic.target, x: 0.9, y: 1.5, w: 0.8, h: 0.8 });
   s.addText("ADVERSARIAL GRAPH ML  ·  EXPERIMENT REPORT", { x: 0.95, y: 2.5, w: 11, h: 0.4,
@@ -120,7 +123,7 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 7, offset: 3, angl
     fontFace: HEAD, fontSize: 50, bold: true, color: WHITE, lineSpacingMultiple: 0.95, margin: 0 });
   s.addText([
     { text: "Black-box · query-only · injection-only attacks on GNN graph classifiers", options: { breakLine: true, color: "CADCFC" } },
-    { text: "PROTEINS dataset  ·  GCN / GIN / GAT / SAGE / median-pool victims", options: { color: GREY } },
+    { text: "PROTEINS dataset  ·  GCN / GIN / GAT / SAGE / median-pool victims", options: { color: "A9B4D6" } },
   ], { x: 0.95, y: 4.95, w: 11, h: 0.9, fontFace: BODY, fontSize: 15, margin: 0, lineSpacingMultiple: 1.2 });
 
   // big stat strip
@@ -144,7 +147,7 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 7, offset: 3, angl
   ];
   tm.forEach((d, i) => {
     const col = i % 2, row = Math.floor(i / 2);
-    chip(s, 0.7 + col * 6.15, 1.95 + row * 2.4, 5.85, 2.15, d[0], d[1], d[2], d[3]);
+    chip(s, 0.7 + col * 6.15, 2.5 + row * 1.75, 5.85, 1.4, d[0], d[1], d[2], d[3]);
   });
 
   // ============================================================
@@ -164,7 +167,14 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 7, offset: 3, angl
     { text: "", options: { breakLine: true, fontSize: 6 } },
     { text: "Make edges part of the diffusion state →", options: { bold: true, color: GREEN, breakLine: true, fontSize: 14 } },
     { text: "the trajectory gains a dimension that actually changes the prediction. Ceiling broken.", options: { color: "44485E", fontSize: 12.5 } },
-  ], { x: rx + 0.25, y: 2.5, w: 3.7, h: 3.5, fontFace: BODY, margin: 0, lineSpacingMultiple: 1.05, valign: "top" });
+  ], { x: rx + 0.25, y: 2.5, w: 3.7, h: 2.55, fontFace: BODY, margin: 0, lineSpacingMultiple: 1.05, valign: "top" });
+  // result highlight at panel bottom
+  s.addShape(pres.shapes.RECTANGLE, { x: rx + 0.25, y: 5.18, w: 3.65, h: 0.82, fill: { color: "EAF6F2" } });
+  s.addShape(pres.shapes.RECTANGLE, { x: rx + 0.25, y: 5.18, w: 0.09, h: 0.82, fill: { color: GREEN } });
+  s.addText([
+    { text: "67.3%  →  97.7%", options: { fontSize: 18, bold: true, color: GREEN, breakLine: true } },
+    { text: "the moment edges entered the diffusion", options: { fontSize: 10.5, color: "3A6157" } },
+  ], { x: rx + 0.45, y: 5.24, w: 3.4, h: 0.72, fontFace: HEAD, margin: 0, valign: "middle" });
 
   // ============================================================
   // SLIDE 4 — Tuning stack
@@ -180,12 +190,12 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 7, offset: 3, angl
     [icw.bolt, "Per-node escalation", "m=2 with independent edge masks", CRIMSON],
   ];
   tiers.forEach((d, i) => {
-    const y = 1.8 + i * 0.92;
-    s.addShape(pres.shapes.RECTANGLE, { x: 8.5, y, w: 4.2, h: 0.8, fill: { color: WHITE }, shadow: shadow() });
-    s.addShape(pres.shapes.OVAL, { x: 8.65, y: y + 0.16, w: 0.48, h: 0.48, fill: { color: d[3] } });
-    s.addImage({ data: d[0], x: 8.75, y: y + 0.26, w: 0.28, h: 0.28 });
-    s.addText(`${i + 1}. ${d[1]}`, { x: 9.25, y: y + 0.08, w: 3.4, h: 0.36, fontFace: HEAD, fontSize: 12.5, bold: true, color: INK, margin: 0, valign: "middle" });
-    s.addText(d[2], { x: 9.25, y: y + 0.42, w: 3.4, h: 0.32, fontFace: BODY, fontSize: 10, color: "5A5F75", margin: 0, valign: "middle" });
+    const y = 1.85 + i * 0.87;
+    s.addShape(pres.shapes.RECTANGLE, { x: 8.5, y, w: 4.2, h: 0.74, fill: { color: WHITE }, shadow: shadow() });
+    s.addShape(pres.shapes.OVAL, { x: 8.65, y: y + 0.13, w: 0.48, h: 0.48, fill: { color: d[3] } });
+    s.addImage({ data: d[0], x: 8.75, y: y + 0.23, w: 0.28, h: 0.28 });
+    s.addText(`${i + 1}. ${d[1]}`, { x: 9.25, y: y + 0.06, w: 3.4, h: 0.34, fontFace: HEAD, fontSize: 12.5, bold: true, color: INK, margin: 0, valign: "middle" });
+    s.addText(d[2], { x: 9.25, y: y + 0.40, w: 3.4, h: 0.30, fontFace: BODY, fontSize: 10, color: "5A5F75", margin: 0, valign: "middle" });
   });
 
   // ============================================================
@@ -201,7 +211,7 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 7, offset: 3, angl
     [icw.bug, "13 graphs remain stuck — small graphs where one node can't move the readout.", GOLD],
   ];
   facts.forEach((d, i) => {
-    const y = 1.95 + i * 1.45;
+    const y = 1.75 + i * 1.58;
     s.addShape(pres.shapes.RECTANGLE, { x: cx, y, w: 3.7, h: 1.25, fill: { color: WHITE }, shadow: shadow() });
     s.addShape(pres.shapes.OVAL, { x: cx + 0.22, y: y + 0.34, w: 0.55, h: 0.55, fill: { color: d[2] } });
     s.addImage({ data: d[0], x: cx + 0.33, y: y + 0.45, w: 0.33, h: 0.33 });
@@ -214,16 +224,17 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 7, offset: 3, angl
   s = pres.addSlide(); bgLight(s);
   header(s, "Generalization", "What Actually Defends?", GREEN);
   s.addImage({ path: FIG("chart_robustness.png"), x: 0.7, y: 1.7, w: 7.9, h: 4.47, shadow: shadow() });
-  s.addShape(pres.shapes.RECTANGLE, { x: 8.85, y: 1.85, w: 3.85, h: 2.0, fill: { color: CRIMSON } });
-  s.addImage({ data: icw.target, x: 9.1, y: 2.1, w: 0.5, h: 0.5 });
-  s.addText("Conv type ≠ defense", { x: 9.7, y: 2.12, w: 2.85, h: 0.5, fontFace: HEAD, fontSize: 15, bold: true, color: WHITE, margin: 0, valign: "middle" });
-  s.addText("GIN, GAT, SAGE all use mean-pool and are MORE vulnerable than GCN — 100% ASR with diffusion never firing.", { x: 9.1, y: 2.7, w: 3.45, h: 1.05, fontFace: BODY, fontSize: 12, color: "FFE3E5", margin: 0, valign: "top" });
-  s.addShape(pres.shapes.RECTANGLE, { x: 8.85, y: 4.05, w: 3.85, h: 2.05, fill: { color: GREEN } });
+  s.addShape(pres.shapes.RECTANGLE, { x: 8.85, y: 1.7, w: 3.85, h: 2.18, fill: { color: CRIMSON } });
+  s.addShape(pres.shapes.OVAL, { x: 9.08, y: 1.95, w: 0.56, h: 0.56, fill: { color: WHITE } });
+  s.addImage({ data: ic.target, x: 9.17, y: 2.04, w: 0.38, h: 0.38 });
+  s.addText("Conv type ≠ defense", { x: 9.75, y: 1.98, w: 2.8, h: 0.5, fontFace: HEAD, fontSize: 15, bold: true, color: WHITE, margin: 0, valign: "middle" });
+  s.addText("GIN, GAT, SAGE all use mean-pool and are MORE vulnerable than GCN — 100% ASR with diffusion never firing.", { x: 9.1, y: 2.6, w: 3.45, h: 1.15, fontFace: BODY, fontSize: 12, color: "FFE3E5", margin: 0, valign: "top" });
+  s.addShape(pres.shapes.RECTANGLE, { x: 8.85, y: 4.0, w: 3.85, h: 2.17, fill: { color: GREEN } });
   // shield on white circle for contrast against green box
-  s.addShape(pres.shapes.OVAL, { x: 9.05, y: 4.28, w: 0.56, h: 0.56, fill: { color: WHITE } });
-  s.addImage({ data: ic.shield, x: 9.14, y: 4.37, w: 0.38, h: 0.38 });
-  s.addText("Defend the READOUT", { x: 9.72, y: 4.32, w: 2.85, h: 0.5, fontFace: HEAD, fontSize: 15, bold: true, color: WHITE, margin: 0, valign: "middle" });
-  s.addText("Only median-pool resists (92.46%). The pooling — not the aggregator — is the true attack surface.", { x: 9.1, y: 4.92, w: 3.45, h: 1.05, fontFace: BODY, fontSize: 12, color: "E2F5F1", margin: 0, valign: "top" });
+  s.addShape(pres.shapes.OVAL, { x: 9.08, y: 4.25, w: 0.56, h: 0.56, fill: { color: WHITE } });
+  s.addImage({ data: ic.shield, x: 9.17, y: 4.34, w: 0.38, h: 0.38 });
+  s.addText("Defend the READOUT", { x: 9.75, y: 4.28, w: 2.8, h: 0.5, fontFace: HEAD, fontSize: 15, bold: true, color: WHITE, margin: 0, valign: "middle" });
+  s.addText("Only median-pool resists (92.46%). The pooling — not the aggregator — is the true attack surface.", { x: 9.1, y: 4.9, w: 3.45, h: 1.15, fontFace: BODY, fontSize: 12, color: "EAFBF6", margin: 0, valign: "top" });
 
   // ============================================================
   // SLIDE 7 — Defeating the defense
@@ -231,18 +242,16 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 7, offset: 3, angl
   s = pres.addSlide(); bgLight(s);
   header(s, "Stress Test", "Defeating the Median-Pool Defense", BLUE);
   s.addImage({ path: FIG("chart_defense_breakdown.png"), x: 0.7, y: 1.7, w: 7.6, h: 4.6, shadow: shadow() });
-  s.addShape(pres.shapes.RECTANGLE, { x: 8.65, y: 1.9, w: 4.05, h: 4.3, fill: { color: WHITE }, shadow: shadow() });
-  s.addShape(pres.shapes.RECTANGLE, { x: 8.65, y: 1.9, w: 4.05, h: 0.6, fill: { color: BLUE } });
-  s.addText("WHEN DIFFUSION MATTERS", { x: 8.85, y: 1.98, w: 3.7, h: 0.45, fontFace: HEAD, fontSize: 12.5, bold: true, color: WHITE, charSpacing: 1, margin: 0, valign: "middle" });
+  s.addShape(pres.shapes.RECTANGLE, { x: 8.65, y: 1.7, w: 4.05, h: 4.6, fill: { color: WHITE }, shadow: shadow() });
+  s.addShape(pres.shapes.RECTANGLE, { x: 8.65, y: 1.7, w: 4.05, h: 0.6, fill: { color: BLUE } });
+  s.addText("WHEN DIFFUSION MATTERS", { x: 8.85, y: 1.78, w: 3.7, h: 0.45, fontFace: HEAD, fontSize: 12.5, bold: true, color: WHITE, charSpacing: 1, margin: 0, valign: "middle" });
   s.addText([
-    { text: "63%", options: { fontSize: 30, bold: true, color: GREY, breakLine: true } },
-    { text: "baseline-solo ASR on the hardest fold once median-pool defends", options: { fontSize: 11.5, color: "5A5F75", breakLine: true } },
-    { text: "", options: { fontSize: 8, breakLine: true } },
-    { text: "92.46%", options: { fontSize: 30, bold: true, color: GREEN, breakLine: true } },
-    { text: "recovered by joint X+A diffusion + k_sweep", options: { fontSize: 11.5, color: "5A5F75", breakLine: true } },
-    { text: "", options: { fontSize: 8, breakLine: true } },
-    { text: "The diffusion mechanism earns its keep precisely against defenses — on undefended models a simple baseline suffices.", options: { fontSize: 12, italic: true, color: NAVY } },
-  ], { x: 8.85, y: 2.65, w: 3.65, h: 3.4, fontFace: BODY, margin: 0, lineSpacingMultiple: 1.0, valign: "top" });
+    { text: "63%", options: { fontSize: 32, bold: true, color: GREY, breakLine: true, paraSpaceAfter: 2 } },
+    { text: "baseline-solo ASR on the hardest fold once median-pool defends", options: { fontSize: 11.5, color: "5A5F75", breakLine: true, paraSpaceAfter: 14 } },
+    { text: "92.46%", options: { fontSize: 32, bold: true, color: GREEN, breakLine: true, paraSpaceAfter: 2 } },
+    { text: "recovered by joint X+A diffusion + k_sweep", options: { fontSize: 11.5, color: "5A5F75", breakLine: true, paraSpaceAfter: 16 } },
+    { text: "The diffusion mechanism earns its keep precisely against defenses — on undefended models a simple baseline suffices.", options: { fontSize: 12.5, italic: true, color: NAVY } },
+  ], { x: 8.85, y: 2.55, w: 3.65, h: 3.6, fontFace: BODY, margin: 0, valign: "middle" });
 
   // ============================================================
   // SLIDE 8 — Takeaways (dark)
@@ -260,12 +269,12 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 7, offset: 3, angl
   ];
   take.forEach((d, i) => {
     const y = 2.95 + i * 1.42;
-    s.addShape(pres.shapes.RECTANGLE, { x: 0.85, y, w: 11.6, h: 1.25, fill: { color: "2C3666" } });
-    s.addShape(pres.shapes.RECTANGLE, { x: 0.85, y, w: 0.1, h: 1.25, fill: { color: d[3] } });
-    s.addShape(pres.shapes.OVAL, { x: 1.15, y: y + 0.34, w: 0.58, h: 0.58, fill: { color: d[3] } });
-    s.addImage({ data: d[0], x: 1.27, y: y + 0.46, w: 0.34, h: 0.34 });
-    s.addText(d[1], { x: 2.0, y: y + 0.18, w: 10.2, h: 0.45, fontFace: HEAD, fontSize: 17, bold: true, color: WHITE, margin: 0, valign: "middle" });
-    s.addText(d[2], { x: 2.0, y: y + 0.62, w: 10.2, h: 0.55, fontFace: BODY, fontSize: 12.5, color: "CADCFC", margin: 0, valign: "middle" });
+    s.addShape(pres.shapes.RECTANGLE, { x: 0.85, y, w: 11.6, h: 1.25, fill: { color: "3C4789" } });
+    s.addShape(pres.shapes.RECTANGLE, { x: 0.85, y, w: 0.12, h: 1.25, fill: { color: d[3] } });
+    s.addShape(pres.shapes.OVAL, { x: 1.18, y: y + 0.34, w: 0.58, h: 0.58, fill: { color: d[3] } });
+    s.addImage({ data: d[0], x: 1.30, y: y + 0.46, w: 0.34, h: 0.34 });
+    s.addText(d[1], { x: 2.05, y: y + 0.18, w: 10.2, h: 0.45, fontFace: HEAD, fontSize: 17, bold: true, color: WHITE, margin: 0, valign: "middle" });
+    s.addText(d[2], { x: 2.05, y: y + 0.62, w: 10.2, h: 0.55, fontFace: BODY, fontSize: 12.5, color: "EAF0FF", margin: 0, valign: "middle" });
   });
 
   await pres.writeFile({ fileName: "N24_diffusion_attack_deck.pptx" });

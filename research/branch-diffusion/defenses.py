@@ -92,21 +92,36 @@ def svd_defense(data, rank=10):
                 batch=getattr(data, "batch", None))
 
 
-def norm_filter_defense(data, max_norm=None, percentile=99):
+def norm_filter_defense(data, max_norm=None, mean=None, std=None, k=3.0, percentile=99):
     """
-    Remove nodes whose feature L2 norm exceeds threshold.
+    Remove nodes whose feature L2 norm exceeds a threshold.
 
-    If max_norm is None, threshold = percentile-th of current graph's norms.
-    This is a within-graph anomaly detector — robust if attack uses high feat_scale.
+    Threshold precedence (mirrors degree_filter_defense / mahalanobis_defense — the
+    threshold is a FIXED clean-distribution value, so a multi-node injection cannot
+    evade it by inflating in-graph statistics):
+      1. explicit `max_norm`               -> use as-is
+      2. clean `mean` + `std` (+ k)        -> threshold = mean + k*std  (REFERENCE)
+      3. neither -> within-graph percentile-th of current graph's norms (fallback)
+
+    Mode (2) is the paper-grade configuration: `mean`/`std` are the node-norm
+    statistics of the TRAINING-fold distribution, injected at wrap time (like the
+    degfilter degree stats / mahalanobis feature stats). With a WITHIN-GRAPH
+    percentile (mode 3) a multi-node injection of nb nodes sits inside the upper
+    percentile of its own graph and is never flagged — mode (2) fixes that so the
+    defense actually engages for multi-node high-norm injection.
     """
     x = data.x
     norms = x.norm(p=2, dim=1)
 
-    if max_norm is None:
-        # Within-graph percentile threshold
-        max_norm = torch.quantile(norms, percentile / 100.0).item()
+    if max_norm is not None:
+        thr = float(max_norm)
+    elif mean is not None and std is not None:
+        thr = float(mean) + k * float(std)
+    else:
+        # Within-graph percentile fallback (standalone use)
+        thr = torch.quantile(norms, percentile / 100.0).item()
 
-    keep = norms <= max_norm
+    keep = norms <= thr
     if keep.sum() == 0:
         # All nodes flagged — fall back to keeping all (defense saturated)
         return data
@@ -723,6 +738,10 @@ DEFENSE_REGISTRY = {
     "jaccard_strong": (jaccard_defense, {"threshold": 0.05, "similarity": "cosine"}),
     "svd":        (svd_defense,         {"rank": 10}),
     "svd_strong": (svd_defense,         {"rank": 5}),
+    # normfilter: FEATURE/norm-aware. Paper-grade use injects clean train-fold
+    # node-norm mean/std at wrap time (REFERENCE threshold = mean + k*std), like the
+    # degfilter degree stats. Registry holds only the within-graph percentile
+    # fallback used for standalone (no-stats) calls.
     "normfilter": (norm_filter_defense, {"percentile": 95}),
     "normfilter_strong": (norm_filter_defense, {"percentile": 90}),
     # degfilter: STRUCTURE/degree-aware. Binds against full-edge single-node

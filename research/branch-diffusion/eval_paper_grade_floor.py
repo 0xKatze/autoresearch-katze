@@ -70,11 +70,17 @@ from defenses import (DefendedModel, norm_filter_defense, mahalanobis_defense,  
 DEFENSES = ["none", "normfilter", "mahalanobis", "degfilter"]
 EFFECTIVE = ["normfilter", "mahalanobis", "degfilter"]
 DEGFILTER_K = 3.0
+NORMFILTER_K = 3.0   # REFERENCE norm threshold = train-fold mean + NORMFILTER_K*std
 
 ATTACKS = {
     "SGDI-full":   ("sgdi",  {"feat_mode": "sgdi", "node_budget": 1, "feat_scale": "auto_x2"}),
     "FM-A-full":   ("flow",  {"edge_strategy": "full", "node_budget": 1, "feat_scale": "auto_x2"}),
     "FM-A-eb1":    ("flow",  {"edge_strategy": "topk", "node_budget": 1, "feat_scale": 1.0}),
+    # C1 CONTROL: plain on-manifold-norm flow at nb=10 / topk edges / fs=1.0, WITHOUT
+    # OM2C's 2-channel tangent-subspace projection. Tests whether "10 nodes + low
+    # norm + sparse edges" alone matches OM2C-nb10 — i.e. whether OM2C's special
+    # tangent-projection design is even necessary for a high defense floor.
+    "FM-nb10-eb1-lownorm": ("flow", {"edge_strategy": "topk", "node_budget": 10, "feat_scale": 1.0}),
     "OM2C-nb1":    ("om2c",  {"node_budget": 1,  "feat_scale": 1.0}),
     "OM2C-nb10":   ("om2c",  {"node_budget": 10, "feat_scale": 1.0}),   # MULTI-NODE candidate
 }
@@ -113,10 +119,25 @@ def clean_test_acc(model, ds, test_idx):
 
 
 def build_defended(model, defense, ref_graphs):
+    """Wrap `model` with `defense`, deriving all defense statistics from `ref_graphs`.
+
+    `ref_graphs` are the clean TRAINING-fold graphs (see training_ref_graphs) — NOT the
+    attacked test graphs. This breaks the circularity (C3): otherwise the mahalanobis
+    ellipsoid (and the norm/degree thresholds) would be fit on the same capped test set
+    the OM2C prior projects into, so the attack lands exactly inside the ball the defense
+    checks. Fitting on the held-out training fold makes every defense independent of the
+    graphs it is asked to filter.
+    """
     if defense == "none":
         return model
     if defense == "normfilter":
-        return DefendedModel(model, norm_filter_defense, "normfilter", percentile=95)
+        # C2: REFERENCE norm threshold = train-fold mean + k*std (engages for multi-node
+        # injection). A within-graph percentile would let nb injected nodes hide in the
+        # graph's own upper percentile and never fire.
+        norms = torch.cat([g.x.norm(p=2, dim=1) for g in ref_graphs]).to(DEVICE).float()
+        return DefendedModel(model, norm_filter_defense, "normfilter",
+                             mean=float(norms.mean().item()),
+                             std=float(norms.std().item()), k=NORMFILTER_K)
     if defense == "mahalanobis":
         X = torch.cat([g.x for g in ref_graphs], dim=0).to(DEVICE).float()
         mean_ = X.mean(dim=0); d = X.size(1)
@@ -211,6 +232,37 @@ def load_meta_for_seed(seed):
     return json.loads(p.read_text())
 
 
+def training_ref_graphs(ds, meta, fold_info):
+    """Clean TRAINING-fold graphs for this fold (C3 fix).
+
+    Reconstructs the FROZEN StratifiedKFold split via prepare.get_folds with the victim
+    seed/n_folds (the meta stores only test_idx), then returns the train_idx graphs.
+    These are independent of the attacked test graphs, so defense statistics fit on them
+    are not circular with the OM2C prior / attack. The reconstructed test split is
+    verified against meta['test_idx'] to guarantee we reproduced the exact fold.
+    """
+    saved_seed, saved_nf = prepare.SEED, prepare.N_FOLDS
+    prepare.SEED = meta["seed"]; prepare.N_FOLDS = meta["n_folds"]
+    try:
+        train_idx = None
+        for fidx, tr, va, te in prepare.get_folds(ds):
+            if fidx == fold_info["fold_idx"]:
+                if sorted(int(i) for i in te) != sorted(int(i) for i in fold_info["test_idx"]):
+                    raise RuntimeError(f"fold {fidx}: reconstructed test_idx != meta test_idx")
+                train_idx = tr
+                break
+    finally:
+        prepare.SEED = saved_seed; prepare.N_FOLDS = saved_nf
+    if train_idx is None:
+        raise RuntimeError(f"fold {fold_info['fold_idx']} not found in reconstructed folds")
+    graphs = []
+    for data in Subset(ds, train_idx):
+        data = data.to(DEVICE)
+        data.batch = torch.zeros(data.num_nodes, dtype=torch.long, device=DEVICE)
+        graphs.append(data)
+    return graphs
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--seeds", type=str, default="42,7,1027")
@@ -249,11 +301,15 @@ def main():
             model.eval()
             vacc = clean_test_acc(model, ds, fold_info["test_idx"]); victim_accs.append(vacc)
             graphs = collect_test_graphs(model, ds, fold_info["test_idx"])[:cap]
+            # C3: defense statistics fit on the held-out TRAINING fold, NOT the attacked
+            # test graphs (om2c_prior below still uses test graphs — that is the attack's
+            # own prior and is intentionally left untouched).
+            ref_graphs = training_ref_graphs(ds, meta, fold_info)
             om2c_prior = O.om2c_prior(graphs, DEVICE, O.CONFIG["tangent_dim"],
                                       O.CONFIG["sigma_mult"], eps=O.CONFIG["prior_eps"])
             cacc_def = {}
             for dn in DEFENSES:
-                v = build_defended(model, dn, graphs)
+                v = build_defended(model, dn, ref_graphs)
                 ca = clean_test_acc(v, ds, fold_info["test_idx"])
                 clean_acc_def[dn].append(ca); cacc_def[dn] = round(ca, 4)
             unit = {"seed": seed, "fold": fi, "victim_acc": round(vacc, 4),
@@ -261,7 +317,7 @@ def main():
             for akey, (rk, ov) in ATTACKS.items():
                 asrs = {}
                 for dn in DEFENSES:
-                    victim = build_defended(model, dn, graphs)
+                    victim = build_defended(model, dn, ref_graphs)
                     r = run_attack_cell(rk, ov, victim, graphs, om2c_prior)
                     cell_asr[akey][dn].append(r["asr"]); cell_q[akey][dn] += r["q"]
                     if dn == "none":

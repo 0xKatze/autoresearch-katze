@@ -1,0 +1,143 @@
+{
+  "stamp": "20260617_150353",
+  "experiment": "FM(attack_flow variant A) vs SGDI \u2014 defended head-to-head",
+  "attack_under_test": "attack_flow.run_attack (N28 FM variant A, analytic rectified flow)",
+  "baseline": "attack.run_attack feat_mode=sgdi (branch-diffusion SGDI Langevin+Mahalanobis)",
+  "dataset": "PROTEINS",
+  "victim_model": "GCN",
+  "mode": "DIAGNOSTIC single-seed (NOT gate-passed)",
+  "device": "cpu",
+  "n_folds": 1,
+  "graph_cap_per_fold": 4,
+  "defenses": [
+    "none",
+    "normfilter",
+    "mahalanobis"
+  ],
+  "feat_scales": [
+    "auto_x2"
+  ],
+  "wandb": false,
+  "fm_config": {
+    "T_flow": 10,
+    "integrator": "euler",
+    "grad_method": "cge",
+    "sigma": 0.005,
+    "kappa": -0.1,
+    "loss_type": "cw",
+    "edge_strategy": "full",
+    "node_budget": 1,
+    "n_restarts": 3
+  },
+  "sgdi_config": {
+    "feat_mode": "sgdi",
+    "node_budget": 1,
+    "sgdi_eta": 0.3,
+    "sgdi_temp": 0.1,
+    "zo_epochs": 40,
+    "zo_restarts": 3
+  },
+  "victim_acc_mean": 0.6996,
+  "victim_acc_per_fold": [
+    0.6996
+  ],
+  "fm_asr_by_cell": {
+    "auto_x2|none": {
+      "mean_pct": 100.0,
+      "fold_std_pct": 0.0,
+      "per_fold": [
+        1.0
+      ]
+    },
+    "auto_x2|normfilter": {
+      "mean_pct": 0.0,
+      "fold_std_pct": 0.0,
+      "per_fold": [
+        0.0
+      ]
+    },
+    "auto_x2|mahalanobis": {
+      "mean_pct": 0.0,
+      "fold_std_pct": 0.0,
+      "per_fold": [
+        0.0
+      ]
+    }
+  },
+  "sgdi_asr_by_cell": {
+    "auto_x2|none": {
+      "mean_pct": 100.0,
+      "fold_std_pct": 0.0,
+      "per_fold": [
+        1.0
+      ]
+    },
+    "auto_x2|normfilter": {
+      "mean_pct": 25.0,
+      "fold_std_pct": 0.0,
+      "per_fold": [
+        0.25
+      ]
+    },
+    "auto_x2|mahalanobis": {
+      "mean_pct": 0.0,
+      "fold_std_pct": 0.0,
+      "per_fold": [
+        0.0
+      ]
+    }
+  },
+  "fm_total_queries_by_cell": {
+    "auto_x2|none": 4,
+    "auto_x2|normfilter": 852,
+    "auto_x2|mahalanobis": 852
+  },
+  "sgdi_total_queries_by_cell": {
+    "auto_x2|none": 466,
+    "auto_x2|normfilter": 4495,
+    "auto_x2|mahalanobis": 4550
+  },
+  "fm_total_queries_overall": 1708,
+  "sgdi_total_queries_overall": 9511,
+  "fm_in_ball_fraction_by_fs": {
+    "auto_x2": {
+      "in_ball": 28,
+      "total": 28,
+      "fraction": 1.0
+    }
+  },
+  "wall_s": 8.4,
+  "fold_records": [
+    {
+      "fold": 0,
+      "victim_acc": 0.6996,
+      "n_graphs": 4,
+      "cells": {
+        "auto_x2|none": {
+          "fm_asr": 1.0,
+          "sgdi_asr": 1.0,
+          "fm_queries": 4,
+          "sgdi_queries": 466,
+          "fm_in_ball": 4,
+          "fm_in_ball_total": 4
+        },
+        "auto_x2|normfilter": {
+          "fm_asr": 0.0,
+          "sgdi_asr": 0.25,
+          "fm_queries": 852,
+          "sgdi_queries": 4495,
+          "fm_in_ball": 12,
+          "fm_in_ball_total": 12
+        },
+        "auto_x2|mahalanobis": {
+          "fm_asr": 0.0,
+          "sgdi_asr": 0.0,
+          "fm_queries": 852,
+          "sgdi_queries": 4550,
+          "fm_in_ball": 12,
+          "fm_in_ball_total": 12
+        }
+      }
+    }
+  ]
+}

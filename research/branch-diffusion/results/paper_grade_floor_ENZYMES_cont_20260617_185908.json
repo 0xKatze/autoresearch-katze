@@ -1,0 +1,514 @@
+{
+  "stamp": "20260617_185908",
+  "experiment": "SECONDARY ENZYMES-cont floor (reduced rigor)",
+  "rigor_note": "5-fold seed42 only (single seed) \u2014 NOT gate-grade",
+  "dataset": "ENZYMES",
+  "victim_model": "GCN",
+  "continuous": true,
+  "candidate": "OM2C-nb10",
+  "device": "cpu",
+  "cap_per_fold": 10,
+  "n_units": 5,
+  "defenses": [
+    "none",
+    "normfilter",
+    "mahalanobis",
+    "degfilter"
+  ],
+  "effective_defenses": [
+    "normfilter",
+    "mahalanobis",
+    "degfilter"
+  ],
+  "degfilter_k": 3.0,
+  "attacks": {
+    "SGDI-full": {
+      "run": "sgdi",
+      "overrides": {
+        "feat_mode": "sgdi",
+        "node_budget": 1,
+        "feat_scale": "auto_x2"
+      }
+    },
+    "FM-A-full": {
+      "run": "flow",
+      "overrides": {
+        "edge_strategy": "full",
+        "node_budget": 1,
+        "feat_scale": "auto_x2"
+      }
+    },
+    "FM-A-eb1": {
+      "run": "flow",
+      "overrides": {
+        "edge_strategy": "topk",
+        "node_budget": 1,
+        "feat_scale": 1.0
+      }
+    },
+    "OM2C-nb1": {
+      "run": "om2c",
+      "overrides": {
+        "node_budget": 1,
+        "feat_scale": 1.0
+      }
+    },
+    "OM2C-nb10": {
+      "run": "om2c",
+      "overrides": {
+        "node_budget": 10,
+        "feat_scale": 1.0
+      }
+    }
+  },
+  "victim_acc_mean": 0.5833,
+  "victim_acc_std": 0.0545,
+  "victim_acc_min": 0.4917,
+  "clean_acc_by_defense": {
+    "none": {
+      "mean": 0.5833
+    },
+    "normfilter": {
+      "mean": 0.56
+    },
+    "mahalanobis": {
+      "mean": 0.5517
+    },
+    "degfilter": {
+      "mean": 0.585
+    }
+  },
+  "floor_summary": {
+    "SGDI-full": {
+      "mean_pct": 2.0,
+      "std_pct": 4.0,
+      "n": 5
+    },
+    "FM-A-full": {
+      "mean_pct": 2.0,
+      "std_pct": 4.0,
+      "n": 5
+    },
+    "FM-A-eb1": {
+      "mean_pct": 2.0,
+      "std_pct": 4.0,
+      "n": 5
+    },
+    "OM2C-nb1": {
+      "mean_pct": 18.0,
+      "std_pct": 11.66,
+      "n": 5
+    },
+    "OM2C-nb10": {
+      "mean_pct": 76.0,
+      "std_pct": 8.0,
+      "n": 5
+    }
+  },
+  "asr_summary": {
+    "SGDI-full": {
+      "none": {
+        "mean_pct": 98.0,
+        "std_pct": 4.0,
+        "n": 5
+      },
+      "normfilter": {
+        "mean_pct": 32.0,
+        "std_pct": 20.4,
+        "n": 5
+      },
+      "mahalanobis": {
+        "mean_pct": 4.0,
+        "std_pct": 4.9,
+        "n": 5
+      },
+      "degfilter": {
+        "mean_pct": 4.0,
+        "std_pct": 8.0,
+        "n": 5
+      }
+    },
+    "FM-A-full": {
+      "none": {
+        "mean_pct": 84.0,
+        "std_pct": 14.97,
+        "n": 5
+      },
+      "normfilter": {
+        "mean_pct": 44.0,
+        "std_pct": 20.59,
+        "n": 5
+      },
+      "mahalanobis": {
+        "mean_pct": 4.0,
+        "std_pct": 4.9,
+        "n": 5
+      },
+      "degfilter": {
+        "mean_pct": 4.0,
+        "std_pct": 8.0,
+        "n": 5
+      }
+    },
+    "FM-A-eb1": {
+      "none": {
+        "mean_pct": 0.0,
+        "std_pct": 0.0,
+        "n": 5
+      },
+      "normfilter": {
+        "mean_pct": 14.0,
+        "std_pct": 8.0,
+        "n": 5
+      },
+      "mahalanobis": {
+        "mean_pct": 2.0,
+        "std_pct": 4.0,
+        "n": 5
+      },
+      "degfilter": {
+        "mean_pct": 4.0,
+        "std_pct": 8.0,
+        "n": 5
+      }
+    },
+    "OM2C-nb1": {
+      "none": {
+        "mean_pct": 38.0,
+        "std_pct": 19.39,
+        "n": 5
+      },
+      "normfilter": {
+        "mean_pct": 40.0,
+        "std_pct": 17.89,
+        "n": 5
+      },
+      "mahalanobis": {
+        "mean_pct": 40.0,
+        "std_pct": 16.73,
+        "n": 5
+      },
+      "degfilter": {
+        "mean_pct": 18.0,
+        "std_pct": 11.66,
+        "n": 5
+      }
+    },
+    "OM2C-nb10": {
+      "none": {
+        "mean_pct": 80.0,
+        "std_pct": 6.32,
+        "n": 5
+      },
+      "normfilter": {
+        "mean_pct": 84.0,
+        "std_pct": 10.2,
+        "n": 5
+      },
+      "mahalanobis": {
+        "mean_pct": 84.0,
+        "std_pct": 4.9,
+        "n": 5
+      },
+      "degfilter": {
+        "mean_pct": 78.0,
+        "std_pct": 7.48,
+        "n": 5
+      }
+    }
+  },
+  "total_queries_by_attack": {
+    "SGDI-full": 743801,
+    "FM-A-full": 185030,
+    "FM-A-eb1": 245981,
+    "OM2C-nb1": 498351,
+    "OM2C-nb10": 4145880
+  },
+  "in_ball_fraction_by_attack": {
+    "SGDI-full": {
+      "in_ball": 0,
+      "total": 0,
+      "fraction": null
+    },
+    "FM-A-full": {
+      "in_ball": 72,
+      "total": 72,
+      "fraction": 1.0
+    },
+    "FM-A-eb1": {
+      "in_ball": 150,
+      "total": 150,
+      "fraction": 1.0
+    },
+    "OM2C-nb1": {
+      "in_ball": 50,
+      "total": 50,
+      "fraction": 1.0
+    },
+    "OM2C-nb10": {
+      "in_ball": 500,
+      "total": 500,
+      "fraction": 1.0
+    }
+  },
+  "paired_test_H1": {
+    "candidate": "OM2C-nb10",
+    "next_best": "OM2C-nb1",
+    "candidate_floor_mean_pct": 76.0,
+    "next_best_floor_mean_pct": 18.0,
+    "mean_diff_pct": 58.0,
+    "wilcoxon_p": 0.0625,
+    "paired_t_p": 0.0009427427488488634,
+    "n_pairs": 5
+  },
+  "floor_per_unit": {
+    "SGDI-full": [
+      0.0,
+      0.0,
+      0.1,
+      0.0,
+      0.0
+    ],
+    "FM-A-full": [
+      0.0,
+      0.0,
+      0.1,
+      0.0,
+      0.0
+    ],
+    "FM-A-eb1": [
+      0.0,
+      0.0,
+      0.1,
+      0.0,
+      0.0
+    ],
+    "OM2C-nb1": [
+      0.1,
+      0.2,
+      0.4,
+      0.1,
+      0.1
+    ],
+    "OM2C-nb10": [
+      0.7,
+      0.7,
+      0.8,
+      0.9,
+      0.7
+    ]
+  },
+  "wall_s": 2176.2,
+  "units": [
+    {
+      "fold": 0,
+      "victim_acc": 0.4917,
+      "n_graphs": 10,
+      "cells": {
+        "SGDI-full": {
+          "none": 1.0,
+          "normfilter": 0.2,
+          "mahalanobis": 0.0,
+          "degfilter": 0.0,
+          "FLOOR": 0.0
+        },
+        "FM-A-full": {
+          "none": 0.6,
+          "normfilter": 0.3,
+          "mahalanobis": 0.0,
+          "degfilter": 0.0,
+          "FLOOR": 0.0
+        },
+        "FM-A-eb1": {
+          "none": 0.0,
+          "normfilter": 0.0,
+          "mahalanobis": 0.0,
+          "degfilter": 0.0,
+          "FLOOR": 0.0
+        },
+        "OM2C-nb1": {
+          "none": 0.1,
+          "normfilter": 0.3,
+          "mahalanobis": 0.2,
+          "degfilter": 0.1,
+          "FLOOR": 0.1
+        },
+        "OM2C-nb10": {
+          "none": 0.8,
+          "normfilter": 0.7,
+          "mahalanobis": 0.8,
+          "degfilter": 0.8,
+          "FLOOR": 0.7
+        }
+      }
+    },
+    {
+      "fold": 1,
+      "victim_acc": 0.65,
+      "n_graphs": 10,
+      "cells": {
+        "SGDI-full": {
+          "none": 1.0,
+          "normfilter": 0.0,
+          "mahalanobis": 0.1,
+          "degfilter": 0.0,
+          "FLOOR": 0.0
+        },
+        "FM-A-full": {
+          "none": 0.8,
+          "normfilter": 0.2,
+          "mahalanobis": 0.1,
+          "degfilter": 0.0,
+          "FLOOR": 0.0
+        },
+        "FM-A-eb1": {
+          "none": 0.0,
+          "normfilter": 0.2,
+          "mahalanobis": 0.0,
+          "degfilter": 0.0,
+          "FLOOR": 0.0
+        },
+        "OM2C-nb1": {
+          "none": 0.6,
+          "normfilter": 0.5,
+          "mahalanobis": 0.6,
+          "degfilter": 0.2,
+          "FLOOR": 0.2
+        },
+        "OM2C-nb10": {
+          "none": 0.8,
+          "normfilter": 0.8,
+          "mahalanobis": 0.8,
+          "degfilter": 0.7,
+          "FLOOR": 0.7
+        }
+      }
+    },
+    {
+      "fold": 2,
+      "victim_acc": 0.6,
+      "n_graphs": 10,
+      "cells": {
+        "SGDI-full": {
+          "none": 1.0,
+          "normfilter": 0.4,
+          "mahalanobis": 0.1,
+          "degfilter": 0.2,
+          "FLOOR": 0.1
+        },
+        "FM-A-full": {
+          "none": 1.0,
+          "normfilter": 0.4,
+          "mahalanobis": 0.1,
+          "degfilter": 0.2,
+          "FLOOR": 0.1
+        },
+        "FM-A-eb1": {
+          "none": 0.0,
+          "normfilter": 0.2,
+          "mahalanobis": 0.1,
+          "degfilter": 0.2,
+          "FLOOR": 0.1
+        },
+        "OM2C-nb1": {
+          "none": 0.6,
+          "normfilter": 0.7,
+          "mahalanobis": 0.6,
+          "degfilter": 0.4,
+          "FLOOR": 0.4
+        },
+        "OM2C-nb10": {
+          "none": 0.8,
+          "normfilter": 1.0,
+          "mahalanobis": 0.9,
+          "degfilter": 0.8,
+          "FLOOR": 0.8
+        }
+      }
+    },
+    {
+      "fold": 3,
+      "victim_acc": 0.6167,
+      "n_graphs": 10,
+      "cells": {
+        "SGDI-full": {
+          "none": 1.0,
+          "normfilter": 0.6,
+          "mahalanobis": 0.0,
+          "degfilter": 0.0,
+          "FLOOR": 0.0
+        },
+        "FM-A-full": {
+          "none": 0.8,
+          "normfilter": 0.8,
+          "mahalanobis": 0.0,
+          "degfilter": 0.0,
+          "FLOOR": 0.0
+        },
+        "FM-A-eb1": {
+          "none": 0.0,
+          "normfilter": 0.1,
+          "mahalanobis": 0.0,
+          "degfilter": 0.0,
+          "FLOOR": 0.0
+        },
+        "OM2C-nb1": {
+          "none": 0.3,
+          "normfilter": 0.3,
+          "mahalanobis": 0.3,
+          "degfilter": 0.1,
+          "FLOOR": 0.1
+        },
+        "OM2C-nb10": {
+          "none": 0.9,
+          "normfilter": 0.9,
+          "mahalanobis": 0.9,
+          "degfilter": 0.9,
+          "FLOOR": 0.9
+        }
+      }
+    },
+    {
+      "fold": 4,
+      "victim_acc": 0.5583,
+      "n_graphs": 10,
+      "cells": {
+        "SGDI-full": {
+          "none": 0.9,
+          "normfilter": 0.4,
+          "mahalanobis": 0.0,
+          "degfilter": 0.0,
+          "FLOOR": 0.0
+        },
+        "FM-A-full": {
+          "none": 1.0,
+          "normfilter": 0.5,
+          "mahalanobis": 0.0,
+          "degfilter": 0.0,
+          "FLOOR": 0.0
+        },
+        "FM-A-eb1": {
+          "none": 0.0,
+          "normfilter": 0.2,
+          "mahalanobis": 0.0,
+          "degfilter": 0.0,
+          "FLOOR": 0.0
+        },
+        "OM2C-nb1": {
+          "none": 0.3,
+          "normfilter": 0.2,
+          "mahalanobis": 0.3,
+          "degfilter": 0.1,
+          "FLOOR": 0.1
+        },
+        "OM2C-nb10": {
+          "none": 0.7,
+          "normfilter": 0.8,
+          "mahalanobis": 0.8,
+          "degfilter": 0.7,
+          "FLOOR": 0.7
+        }
+      }
+    }
+  ]
+}

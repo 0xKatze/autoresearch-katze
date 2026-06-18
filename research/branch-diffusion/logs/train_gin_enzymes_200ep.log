@@ -1,0 +1,22 @@
+=== prepare_cont_gin ENZYMES | n=600 feat=21 (z-scored) classes=6 | GIN | seeds=[42, 7, 1027] epochs=200 device=cuda ===
+  seed42 fold0: val_acc=0.7500 clean_test_acc=0.5833 (70/120 attackable)
+  seed42 fold1: val_acc=0.6500 clean_test_acc=0.6583 (79/120 attackable)
+  seed42 fold2: val_acc=0.7083 clean_test_acc=0.6417 (77/120 attackable)
+  seed42 fold3: val_acc=0.6667 clean_test_acc=0.6583 (79/120 attackable)
+  seed42 fold4: val_acc=0.6583 clean_test_acc=0.6750 (81/120 attackable)
+  -> seed42 clean_test_acc = 0.6433 +/- 0.0318  (PASS >=0.40)
+  -> Saved /workspace/autoresearch-katze-n23/research/branch-diffusion/models_cont/meta_cont_gin_ENZYMES_seed42.json
+  seed7 fold0: val_acc=0.6500 clean_test_acc=0.5833 (70/120 attackable)
+  seed7 fold1: val_acc=0.6500 clean_test_acc=0.6000 (72/120 attackable)
+  seed7 fold2: val_acc=0.6583 clean_test_acc=0.6333 (76/120 attackable)
+  seed7 fold3: val_acc=0.7333 clean_test_acc=0.6750 (81/120 attackable)
+  seed7 fold4: val_acc=0.6750 clean_test_acc=0.6083 (73/120 attackable)
+  -> seed7 clean_test_acc = 0.6200 +/- 0.0319  (PASS >=0.40)
+  -> Saved /workspace/autoresearch-katze-n23/research/branch-diffusion/models_cont/meta_cont_gin_ENZYMES_seed7.json
+  seed1027 fold0: val_acc=0.6833 clean_test_acc=0.5083 (61/120 attackable)
+  seed1027 fold1: val_acc=0.6500 clean_test_acc=0.7167 (86/120 attackable)
+  seed1027 fold2: val_acc=0.6417 clean_test_acc=0.6750 (81/120 attackable)
+  seed1027 fold3: val_acc=0.6667 clean_test_acc=0.5917 (71/120 attackable)
+  seed1027 fold4: val_acc=0.6583 clean_test_acc=0.5833 (70/120 attackable)
+  -> seed1027 clean_test_acc = 0.6150 +/- 0.0733  (PASS >=0.40)
+  -> Saved /workspace/autoresearch-katze-n23/research/branch-diffusion/models_cont/meta_cont_gin_ENZYMES_seed1027.json

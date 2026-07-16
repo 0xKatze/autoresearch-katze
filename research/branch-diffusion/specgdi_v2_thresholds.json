@@ -1,0 +1,32 @@
+{
+  "PROTEINS": {
+    "tau_spec_composite": 1.5845448970794678,
+    "clean_community_density": 0.6252884089085442,
+    "n_samples": 200,
+    "n_density_samples": 200,
+    "median_S": 0.23128187656402588,
+    "K_trojan": 3,
+    "k_top": 20,
+    "beta": 1.0
+  },
+  "ENZYMES": {
+    "tau_spec_composite": 0.7222248315811157,
+    "clean_community_density": 0.5934309743616911,
+    "n_samples": 200,
+    "n_density_samples": 200,
+    "median_S": 0.1926880180835724,
+    "K_trojan": 3,
+    "k_top": 20,
+    "beta": 1.0
+  },
+  "default": {
+    "tau_spec_composite": 1.5845448970794678,
+    "clean_community_density": 0.6252884089085442,
+    "n_samples": 200,
+    "n_density_samples": 200,
+    "median_S": 0.23128187656402588,
+    "K_trojan": 3,
+    "k_top": 20,
+    "beta": 1.0
+  }
+}

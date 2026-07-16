@@ -1,92 +1,73 @@
 # autoresearch-katze
 
-Automated adversarial attack research framework for graph classification.
-Inspired by [karpathy/autoresearch](https://github.com/karpathy/autoresearch)
-and [AutoResearchClaw](https://github.com/aiming-lab/AutoResearchClaw).
+Two separable things live here (split 2026-05-25):
+
+- **`framework/`** — the reusable **autoresearch FRAMEWORK** (generic self-driving research loop), inspired by [karpathy/autoresearch](https://github.com/karpathy/autoresearch) + [AutoResearchClaw](https://github.com/aiming-lab/AutoResearchClaw). Domain-agnostic; drives experiments on *any* research line.
+- **`research/branch-diffusion/`** — the **RESEARCH** that applies the framework: diffusion-based node-injection attacks on graph classifiers (N23 → N24 → SGDI). This is a **branch of GZOO-KATZE** (git branch `branch-diffusion`); in the wiki it lives under `projects/gzoo-katze/branches/branch-diffusion/`.
+
+> **Framework = how the search is driven; research = what was found.** Keep them distinct.
+> The framework references research artifacts via `framework/_paths.py::RESEARCH_DIR` (default `../research/branch-diffusion`, override with the `RESEARCH_DIR` env var to point at a different research line).
 
 ## Quick Start
 
 ```bash
 # 1. Prepare (once): download data, train victim models
-python prepare.py
+python research/branch-diffusion/prepare.py
 
-# 2a. Manual mode: modify attack.py, run experiment
-python run.py          # full 5-fold (~3 min)
-python run.py --quick  # 1-fold fast test (~30s)
+# 2a. Manual mode: modify research/branch-diffusion/attack.py, run experiment
+python research/branch-diffusion/run.py          # full 5-fold (~3 min)
+python research/branch-diffusion/run.py --quick  # 1-fold fast test (~30s)
 
-# 2b. Automated pipeline (recommended):
-python pipeline.py --max-iterations 20 --target-asr 0.95
-python pipeline.py --step              # single iteration
-python pipeline.py --dry-run           # preview next hypothesis
-python pipeline.py --analyze-only      # knowledge base summary
+# 2b. Automated pipeline (framework drives the research dir):
+python framework/pipeline.py --max-iterations 20 --target-asr 0.95
+python framework/pipeline.py --step / --dry-run / --analyze-only
+python framework/pipeline.py --charts / --review / --package
 
-# 2c. Individual features:
-python pipeline.py --charts            # generate all charts
-python pipeline.py --review            # generate peer review
-python pipeline.py --package           # package deliverables
+# 2c. Stealth / defense evaluation (this branch's contribution):
+python research/branch-diffusion/eval_paper_grade.py        # §4.4 grid (SGDI vs N4 × defenses)
+python research/branch-diffusion/eval_nb_crossover.py
+python research/branch-diffusion/eval_kappa_frontier.py
 ```
+Scripts use `Path(__file__)`-relative paths, so invoking them by full path from the repo root works (each puts its own dir on `sys.path[0]`).
 
 ## Structure
 
 ```
-# Core (original)
-prepare.py      ← Fixed: dataset + victim model (DO NOT MODIFY)
-attack.py       ← AI modifies this: attack logic + hyperparams
-run.py          ← Fixed: runs attack.py, records results (DO NOT MODIFY)
-program.md      ← Research instructions for AI agent
-best.json       ← Tracks best ASR achieved
-results/        ← All experiment JSONs
+framework/                ← reusable autoresearch loop (generic)
+  _paths.py               ← FRAMEWORK_DIR + RESEARCH_DIR (the split's seam)
+  pipeline.py             ← orchestrator
+  knowledge.py hypothesis.py codegen.py executor.py analyzer.py decision.py
+  charts.py evolution.py review.py deliverables.py
 
-# Pipeline (AutoResearchClaw-inspired)
-pipeline.py     ← Main orchestrator: automated research loop
-knowledge.py    ← Extract lessons from experiment history → knowledge.json
-hypothesis.py   ← Generate ranked experiment hypotheses
-codegen.py      ← Modify attack.py CONFIG with backup/restore
-executor.py     ← Run experiments with self-healing (timeout/NaN/error → revert)
-analyzer.py     ← 4-layer result verification + quality sentinel
-decision.py     ← Decision engine: PROMOTE / REFINE / PIVOT / STOP
+research/branch-diffusion/  ← the diffusion-attack research (branch of gzoo-katze)
+  # Fixed harness (DO NOT MODIFY content; they stay co-located so their
+  # Path(__file__)-relative imports resolve):
+  prepare.py              ← dataset + victim model
+  run.py                  ← runs attack.py, records results/exp_*.json
+  attack.py               ← AI modifies this: attack logic + feat_modes (manifold/zo_box/zo_normcap/zo_free/sgdi)
+  # Research scripts (this session):
+  prepare_cont.py defenses.py defense_eval.py
+  eval_paper_grade.py eval_nb_crossover.py eval_kappa_frontier.py make_diststealth_chart.py
+  sweep_stealth.py multinode.py
+  program.md best.json    ← framework config + state (per research line)
+  data/ models_saved/ models_cont/ results/ charts/   ← data + artifacts
+  REPORT_BRANCH_DIFFUSION_*.md DESIGN_*.md FINDINGS_N23.md HANDOFF_N23.md
+  attack_diffusion.py quick_test_n23.py   ← N23 sub-stage records (attack_diffusion is stale: old attack.py API)
 
-# New features (AutoResearchClaw-inspired)
-charts.py       ← 📊 Auto-generated charts with error bars + 95% CI
-evolution.py    ← 🧬 Self-learning lessons (JSONL + prompt overlays)
-review.py       ← 📝 Multi-perspective peer review (4 reviewers)
-deliverables.py ← 📦 Package all outputs into deliverables/
-
-# Generated artifacts
-charts/         ← 7 chart types (300 DPI, colorblind-safe)
-evolution/      ← lessons.jsonl (append-only lesson store)
-reviews.md      ← Structured peer review report
-deliverables/   ← All outputs in one folder
-knowledge.json  ← Structured knowledge base
-backups/        ← attack.py backups before each edit
-pipeline.log    ← Pipeline execution log
+.claude/                  ← project tooling (skills/agents/commands/hooks; see below)
 ```
 
-## AutoResearchClaw Feature Mapping
+## Tooling (`.claude/`, consolidated from GZOO-KATZE 2026-05-25)
 
-| AutoResearchClaw Feature | autoresearch-katze Implementation |
-|--------------------------|-----------------------------------|
-| 🔍 4-layer citation verification | `analyzer.py` — L1 range, L2 cross-fold, L3 historical, L4 alignment |
-| 🧪 Experiment sandbox + structured JSON | `executor.py` — self-healing runner + structured results/*.json |
-| 📊 Charts with error bars + CI | `charts.py` — 7 chart types with 95% CI error bars |
-| 📝 Multi-agent peer review | `review.py` — 4 reviewers (attack, statistical, security, consistency) |
-| 🧬 Self-learning evolution | `evolution.py` — JSONL lessons + prompt overlays for hypothesis gen |
-| 📦 Deliverables packaging | `deliverables.py` — charts + review + code + summary + evolution |
-
-## Pipeline Flow
-
-```
-knowledge.py → hypothesis.py → codegen.py → executor.py → analyzer.py → decision.py
-     ↑              ↑                                          ↓              |
-     │        evolution.py                                  charts.py         |
-     │        (prompt overlay)                              review.py         |
-     └────────────────────────── loop ──────────────────────────────────────┘
-                                                         deliverables.py (final)
-```
+Skills: `autoresearch` (the framework loop), `stealth-eval` (this branch's defense/SGDI eval workflow), `research-verification`, `academic-paper-research`, `document-reader-editor`, `notebooklm`, `save`, `ppt-table-generator`. Agents: literature-reviewer / experiment-runner / code-developer / paper-writer / reviewer / lead. Hook `hooks/vault-redflag-check.sh` is present but **not registered** (add to `.claude/settings.json` PostToolUse to activate).
 
 ## Environment
 
 ```bash
-micromamba run -n graph_adversarial python prepare.py
-micromamba run -n graph_adversarial python pipeline.py --max-iterations 20
+micromamba run -n graph_adversarial python research/branch-diffusion/prepare.py
+micromamba run -n graph_adversarial python framework/pipeline.py --max-iterations 20
 ```
+
+## Research findings (branch-diffusion)
+
+N23 feature-only diffusion = inert (falsified) → N24 joint X+A diffusion = 98.43% PROTEINS GCN → **SGDI** (guided diffusion + hard Mahalanobis projection) = defense-invariant, beats N4 norm-cap under a distribution-aware Mahalanobis filter (PROTEINS +61.6pp, ENZYMES +9.5pp, p=0.002) at an undefended-ASR cost. See `research/branch-diffusion/REPORT_BRANCH_DIFFUSION_DISTSTEALTH.md` and wiki `projects/gzoo-katze/branches/branch-diffusion/`.

@@ -1,0 +1,151 @@
+{
+  "meta": {
+    "pct_cut_low_pct": 5.0,
+    "T": 1.0,
+    "K": 2,
+    "alpha": 0.5,
+    "note": "neg_energy threshold; node kept iff neg_energy >= thr"
+  },
+  "datasets": {
+    "PROTEINS": {
+      "folds": [
+        {
+          "fold": 0,
+          "threshold_neg_energy": 0.6445219248533249,
+          "n_ref_graphs": 890,
+          "n_ref_nodes": 34344,
+          "energy_min": 0.25832757353782654,
+          "energy_max": 5.055750846862793,
+          "energy_median": 0.8461436033248901,
+          "clean_acc_undefended": 0.6995515695067265,
+          "clean_acc_gnnsafe": 0.6905829596412556,
+          "clean_acc_drop": 0.008968609865470878,
+          "ood_flag_rate_zo_free": 0.3333333333333333
+        },
+        {
+          "fold": 1,
+          "threshold_neg_energy": 0.6433968305587768,
+          "n_ref_graphs": 890,
+          "n_ref_nodes": 34770,
+          "energy_min": 0.23990488052368164,
+          "energy_max": 2.0794849395751953,
+          "energy_median": 0.7782208919525146,
+          "clean_acc_undefended": 0.7399103139013453,
+          "clean_acc_gnnsafe": 0.7309417040358744,
+          "clean_acc_drop": 0.008968609865470878,
+          "ood_flag_rate_zo_free": 0.23333333333333334
+        },
+        {
+          "fold": 2,
+          "threshold_neg_energy": 0.5921451210975647,
+          "n_ref_graphs": 890,
+          "n_ref_nodes": 34682,
+          "energy_min": 0.21298879384994507,
+          "energy_max": 1.9131526947021484,
+          "energy_median": 0.753921389579773,
+          "clean_acc_undefended": 0.7847533632286996,
+          "clean_acc_gnnsafe": 0.7892376681614349,
+          "clean_acc_drop": -0.004484304932735328,
+          "ood_flag_rate_zo_free": 0.2
+        },
+        {
+          "fold": 3,
+          "threshold_neg_energy": 0.8416646003723145,
+          "n_ref_graphs": 891,
+          "n_ref_nodes": 34973,
+          "energy_min": 0.3037417531013489,
+          "energy_max": 3.3711321353912354,
+          "energy_median": 1.0004615783691406,
+          "clean_acc_undefended": 0.7207207207207207,
+          "clean_acc_gnnsafe": 0.7117117117117117,
+          "clean_acc_drop": 0.009009009009009028,
+          "ood_flag_rate_zo_free": 0.2
+        },
+        {
+          "fold": 4,
+          "threshold_neg_energy": 0.508214282989502,
+          "n_ref_graphs": 891,
+          "n_ref_nodes": 35115,
+          "energy_min": 0.1813754439353943,
+          "energy_max": 4.4265522956848145,
+          "energy_median": 0.7504964470863342,
+          "clean_acc_undefended": 0.7027027027027027,
+          "clean_acc_gnnsafe": 0.6981981981981982,
+          "clean_acc_drop": 0.0045045045045045695,
+          "ood_flag_rate_zo_free": 0.4666666666666667
+        }
+      ],
+      "threshold_neg_energy_mean": 0.6459885519742965
+    },
+    "ENZYMES": {
+      "folds": [
+        {
+          "fold": 0,
+          "threshold_neg_energy": 1.8716185092926025,
+          "n_ref_graphs": 480,
+          "n_ref_nodes": 15473,
+          "energy_min": 0.4067252278327942,
+          "energy_max": 14.08718490600586,
+          "energy_median": 2.5052103996276855,
+          "clean_acc_undefended": 0.49166666666666664,
+          "clean_acc_gnnsafe": 0.49166666666666664,
+          "clean_acc_drop": 0.0,
+          "ood_flag_rate_zo_free": 0.23333333333333334
+        },
+        {
+          "fold": 1,
+          "threshold_neg_energy": 1.7817397594451905,
+          "n_ref_graphs": 480,
+          "n_ref_nodes": 15788,
+          "energy_min": 0.4364506006240845,
+          "energy_max": 8.00888442993164,
+          "energy_median": 2.3094639778137207,
+          "clean_acc_undefended": 0.65,
+          "clean_acc_gnnsafe": 0.65,
+          "clean_acc_drop": 0.0,
+          "ood_flag_rate_zo_free": 0.26666666666666666
+        },
+        {
+          "fold": 2,
+          "threshold_neg_energy": 1.91146719455719,
+          "n_ref_graphs": 480,
+          "n_ref_nodes": 15760,
+          "energy_min": 0.40517497062683105,
+          "energy_max": 82.31261444091797,
+          "energy_median": 2.648977518081665,
+          "clean_acc_undefended": 0.6,
+          "clean_acc_gnnsafe": 0.5916666666666667,
+          "clean_acc_drop": 0.008333333333333304,
+          "ood_flag_rate_zo_free": 0.2
+        },
+        {
+          "fold": 3,
+          "threshold_neg_energy": 1.9109834432601929,
+          "n_ref_graphs": 480,
+          "n_ref_nodes": 15731,
+          "energy_min": 0.44311878085136414,
+          "energy_max": 12.375350952148438,
+          "energy_median": 2.5391666889190674,
+          "clean_acc_undefended": 0.6166666666666667,
+          "clean_acc_gnnsafe": 0.6083333333333333,
+          "clean_acc_drop": 0.008333333333333415,
+          "ood_flag_rate_zo_free": 0.36666666666666664
+        },
+        {
+          "fold": 4,
+          "threshold_neg_energy": 1.7651961624622345,
+          "n_ref_graphs": 480,
+          "n_ref_nodes": 15568,
+          "energy_min": 0.3826487064361572,
+          "energy_max": 15.747237205505371,
+          "energy_median": 2.3811869621276855,
+          "clean_acc_undefended": 0.5583333333333333,
+          "clean_acc_gnnsafe": 0.5666666666666667,
+          "clean_acc_drop": -0.008333333333333304,
+          "ood_flag_rate_zo_free": 0.16666666666666666
+        }
+      ],
+      "threshold_neg_energy_mean": 1.848201013803482
+    }
+  }
+}

@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<!--
+  katze-ppt-skill deck shell. new_deck.py substitutes four placeholders:
+  the deck title, the inlined base stylesheet, the inlined deck script, and
+  the concatenated slide fragments. (Placeholder tokens are intentionally not
+  spelled out here so they are replaced only where they actually appear.)
+  Lucide icons load from CDN; if offline, swap data-lucide spans for text.
+  All content is English; font is Times New Roman; min size 12px.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Single-Node Injection Is Not Enough</title>
+  <style>/* ============================================================
+   katze-ppt-skill — base.css
+   Shared styling for animated 16:9 technical-explainer decks.
+
+   HARD CONSTRAINTS (do not break):
+   - Font family is ALWAYS "Times New Roman", Times, serif.
+   - No text is ever smaller than 12px. --fs-floor is the lower bound;
+     every size token below is >= 12px. New rules must respect it.
+   - All authored content is in English.
+   ============================================================ */
+
+:root {
+  /* ---- Typography (Times New Roman everywhere) ---- */
+  --font-body: "Times New Roman", Times, serif;
+  --font-mono: "Times New Roman", Times, serif; /* keep serif identity even for code */
+  --font-heading: var(--font-body); /* themes may override headings */
+
+  /* ---- Font-size scale (px). FLOOR = 12px, never go below. ---- */
+  --fs-floor: 12px;   /* absolute minimum allowed anywhere */
+  --fs-caption: 18px; /* smallest size used in practice */
+  --fs-body: 32px;
+  --fs-lead: 40px;
+  --fs-h3: 44px;
+  --fs-h2: 60px;
+  --fs-h1: 84px;
+  --fs-display: 112px;
+
+  /* ---- Default palette (clean technical / dark-premium hybrid).
+         Templates may override these tokens in their own scope. ---- */
+  --bg: #0f1320;
+  --bg-soft: #171c2e;
+  --surface: #1e2540;
+  --ink: #f4f6fb;
+  --ink-soft: #b8c0d8;
+  --accent: #4f8cff;
+  --accent-2: #36d399;
+  --warn: #ff6b6b;
+  --line: rgba(255, 255, 255, 0.12);
+  --shell: #05060a;   /* letterbox / page bg behind the stage (themeable) */
+  --r-card: 18px;     /* card corner radius (themeable) */
+
+  /* ---- Motion ---- */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --stagger: 90ms;   /* delay between cascading elements */
+  --dur: 620ms;      /* base element animation duration */
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  background: var(--shell, #05060a);
+  color: var(--ink);
+  font-family: var(--font-body);
+  /* Body baseline sits well above the 12px floor for video legibility. */
+  font-size: var(--fs-body);
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Guard: any element that tries to shrink below the floor is clamped.
+   `font-size: smaller` and inherited shrinks cannot drop under 12px. */
+* { font-size: max(1em, var(--fs-floor)); }
+:where(html, body) { font-size: var(--fs-body); }
+
+/* ============================================================
+   Deck + slide layout (16:9)
+   ============================================================ */
+.deck {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.slide {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: min(100vw, calc(100vh * 16 / 9));
+  height: min(100vh, calc(100vw * 9 / 16));
+  aspect-ratio: 16 / 9;
+  padding: 6.2% 7.5%;
+  background: var(--bg);
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.7em;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 380ms var(--ease-out);
+}
+
+.slide.is-active {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  z-index: 2;
+}
+
+/* ============================================================
+   Typography helpers
+   ============================================================ */
+.slide h1 { font-size: var(--fs-h1); line-height: 1.05; font-weight: 700; }
+.slide h2 { font-size: var(--fs-h2); line-height: 1.1; font-weight: 700; }
+.slide h3 { font-size: var(--fs-h3); line-height: 1.15; font-weight: 700; }
+.slide p, .slide li { font-size: var(--fs-body); color: var(--ink-soft); }
+.lead { font-size: var(--fs-lead); color: var(--ink); }
+.display { font-size: var(--fs-display); line-height: 1; font-weight: 700; }
+.caption { font-size: var(--fs-caption); color: var(--ink-soft); letter-spacing: 0.04em; }
+
+.accent { color: var(--accent); }
+.accent-2 { color: var(--accent-2); }
+.warn { color: var(--warn); }
+strong, b { color: var(--ink); font-weight: 700; }
+u { text-decoration-thickness: 0.06em; text-underline-offset: 0.12em; }
+mark {
+  background: linear-gradient(transparent 55%, color-mix(in srgb, var(--accent) 45%, transparent) 0);
+  color: inherit;
+  padding: 0 0.08em;
+}
+code, .mono { font-family: var(--font-mono); font-style: italic; color: var(--accent-2); }
+
+
+/* Heading font hook (themes override --font-heading; default = body) */
+.slide h1, .slide h2, .slide h3, .display, .eyebrow { font-family: var(--font-heading); }
+
+.eyebrow {
+  font-size: var(--fs-caption);
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* ============================================================
+   Animation primitives
+   Animated elements MUST carry class "an" (or "anim-item") so the
+   deck.js cloneNode reset can re-trigger them on every slide change.
+   Use inline style="--i:N" to stagger order (0,1,2,...).
+   ============================================================ */
+.an, .anim-item {
+  opacity: 0;
+  animation: kp-fade-up var(--dur) var(--ease-out) forwards;
+  animation-delay: calc(var(--i, 0) * var(--stagger));
+}
+
+.an.fade   { animation-name: kp-fade; }
+.an.up     { animation-name: kp-fade-up; }
+.an.right  { animation-name: kp-fade-right; }
+.an.left   { animation-name: kp-fade-left; }
+.an.scale  { animation-name: kp-pop; }
+.an.blur   { animation-name: kp-unblur; }
+
+@keyframes kp-fade      { from { opacity: 0 } to { opacity: 1 } }
+@keyframes kp-fade-up   { from { opacity: 0; transform: translateY(28px) } to { opacity: 1; transform: none } }
+@keyframes kp-fade-right{ from { opacity: 0; transform: translateX(-36px) } to { opacity: 1; transform: none } }
+@keyframes kp-fade-left { from { opacity: 0; transform: translateX(36px) } to { opacity: 1; transform: none } }
+@keyframes kp-pop       { from { opacity: 0; transform: scale(0.86) } to { opacity: 1; transform: scale(1) } }
+@keyframes kp-unblur    { from { opacity: 0; filter: blur(14px) } to { opacity: 1; filter: blur(0) } }
+
+@media (prefers-reduced-motion: reduce) {
+  .an, .anim-item { animation-duration: 1ms; animation-delay: 0ms; }
+  .slide { transition-duration: 1ms; }
+}
+
+/* ============================================================
+   Reusable building blocks (cards, grid, flow, vs)
+   ============================================================ */
+.grid { display: grid; gap: 1.1em; }
+.grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+.grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+.grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card, 18px);
+  padding: 1em 1.15em;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35em;
+}
+.card .icon { color: var(--accent); font-size: var(--fs-h3); line-height: 1; }
+.card h3 { font-size: var(--fs-h3); }
+
+.flow { display: flex; align-items: stretch; gap: 0.9em; }
+.flow .step { flex: 1; }
+.flow .arrow { display: grid; place-items: center; color: var(--accent); font-size: var(--fs-h2); }
+
+.vs { display: grid; grid-template-columns: 1fr auto 1fr; gap: 1em; align-items: stretch; }
+.vs .badge {
+  align-self: center; font-size: var(--fs-h2); font-weight: 700; color: var(--warn);
+}
+
+/* ============================================================
+   Chrome: progress bar, counter, nav buttons
+   ============================================================ */
+.kp-progress {
+  position: fixed; top: 0; left: 0; height: 5px; width: 0%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  z-index: 50; transition: width 320ms var(--ease-out);
+}
+.kp-counter {
+  position: fixed; right: 22px; bottom: 18px; z-index: 50;
+  font-size: var(--fs-caption); color: var(--ink-soft);
+  background: rgba(0,0,0,0.35); padding: 6px 12px; border-radius: 999px;
+}
+.kp-nav {
+  position: fixed; bottom: 16px; left: 22px; z-index: 50; display: flex; gap: 8px;
+}
+.kp-nav button {
+  font-family: var(--font-body); font-size: var(--fs-caption);
+  color: var(--ink); background: rgba(255,255,255,0.08);
+  border: 1px solid var(--line); border-radius: 999px;
+  width: 44px; height: 44px; cursor: pointer;
+}
+.kp-nav button:hover { background: rgba(255,255,255,0.16); }
+
+/* ============================================================
+   Print / PDF (each slide = one page). Used as a fallback export.
+   ============================================================ */
+@media print {
+  @page { size: 1280px 720px; margin: 0; }
+  html, body { background: #fff; }
+  .kp-progress, .kp-counter, .kp-nav { display: none !important; }
+  .slide {
+    position: relative; opacity: 1 !important; visibility: visible !important;
+    width: 1280px; height: 720px; page-break-after: always; break-after: page;
+  }
+  .an, .anim-item { opacity: 1 !important; animation: none !important; }
+}
+</style>
+  <style>/* katze theme — "KATZE Lab" (flagship, hand-designed).
+   Identity: near-black stage + signature lime (#CCFF4C) + Times New Roman
+   editorial type + Consolas code. Derived from the user's own decks (1.pptx /
+   2.pptx) and elevated to a designer-grade signature.
+
+   SIGNATURE: fine lime hairline grid on the stage + lime left-bar on cards +
+   soft lime glow on eyebrows/accents.
+
+   NOTE: this file is curated by hand. To re-learn a raw palette from .pptx,
+   run scripts/extract_style.py --out katze-auto (so this stays intact). */
+:root {
+  --shell:    #060706;
+  --bg:       #0a0c0a;
+  --bg-soft:  #0f120e;
+  --surface:  #12150f;
+  --ink:      #f4f7ef;
+  --ink-soft: #9aa38c;
+  --accent:   #ccff4c;
+  --accent-2: #a8ff60;
+  --warn:     #ff5d8f;
+  --line:     rgba(204, 255, 76, 0.16);
+  --r-card:   6px;
+
+  --font-body:    "Times New Roman", Times, serif;
+  --font-heading: "Times New Roman", Times, serif;
+  --font-mono:    "Consolas", "SF Mono", ui-monospace, monospace;
+}
+
+/* SIGNATURE 1 — fine lime hairline grid on the stage (64px) */
+.slide {
+  background-color: var(--bg);
+  background-image:
+    repeating-linear-gradient(0deg,  rgba(204,255,76,0.05) 0 1px, transparent 1px 64px),
+    repeating-linear-gradient(90deg, rgba(204,255,76,0.05) 0 1px, transparent 1px 64px);
+}
+/* SIGNATURE 2 — lime left accent bar on cards */
+.slide .card { border-left: 3px solid var(--accent); }
+/* SIGNATURE 3 — soft lime glow on eyebrow + accent text */
+.slide .eyebrow { text-shadow: 0 0 18px rgba(204,255,76,0.45); }
+.slide .accent  { text-shadow: 0 0 16px rgba(204,255,76,0.35); }
+</style>
+</head>
+<body>
+  <main class="deck">
+<!-- TEMPLATE: title — opening / cover slide.
+     Use for: deck cover, section dividers.
+     Replace text in {{ ... }}. Keep class="an" + style="--i:N" for cascade. -->
+<section class="slide" data-template="title"
+         style="--bg:#0b1020; background:
+           radial-gradient(1200px 600px at 70% -10%, rgba(79,140,255,0.25), transparent),
+           radial-gradient(900px 500px at 0% 120%, rgba(54,211,153,0.18), transparent), #0b1020;">
+  <p class="eyebrow an up" style="--i:0">GZOO-KATZE / Branch-Diffusion</p>
+  <h1 class="an up" style="--i:1">Single-Node Injection Is Not Enough</h1>
+  <p class="lead an up" style="--i:2; max-width: 22em;">
+    A theoretical, empirical, and defense-side case for why graph injection attacks must distribute across multiple nodes.
+  </p>
+  <p class="caption an fade" style="--i:4">Branch-Diffusion Team &middot; 2026-05-26</p>
+</section>
+
+<!-- TEMPLATE: concept-explainer — explain one idea with a staggered point list
+     plus a visual panel. Use for: defining a mechanism, "how X works".
+     This is the workhorse slide for technical concepts (RNN, attention, etc.). -->
+<section class="slide" data-template="concept-explainer">
+  <p class="eyebrow an up" style="--i:0">THREAT MODEL</p>
+  <h2 class="an up" style="--i:1">Graph injection adversarial attack</h2>
+  <div class="grid cols-2" style="margin-top:0.6em; align-items:center;">
+    <ul style="list-style:none; display:flex; flex-direction:column; gap:0.6em;">
+      <li class="an right" style="--i:2"><strong class="accent">1.</strong> Attacker injects <strong>K=1+</strong> new nodes into a victim graph; controls injected features <code>X*</code> and edges <code>A*</code>.</li>
+      <li class="an right" style="--i:3"><strong class="accent">2.</strong> Goal: flip the graph-level <mark>classification</mark> while staying below defender's anomaly threshold.</li>
+      <li class="an right" style="--i:4"><strong class="accent">3.</strong> Prior work — <code>KATZE</code>, <code>GZOO</code>, <code>SGDI</code> — all default to <strong>K=1</strong> (single node).</li>
+    </ul>
+    <div class="card an scale" style="--i:3; min-height:42%; align-items:center; justify-content:center; gap:0.6em;">
+      <span class="icon" data-lucide="network" aria-hidden="true"></span>
+      <p class="caption">G' = (V ∪ {v*}, E ∪ {(v*, u) : u ∈ S}, X ∪ {x*})</p>
+    </div>
+  </div>
+</section>
+
+<!-- TEMPLATE: concept-explainer — explain one idea with a staggered point list
+     plus a visual panel. Use for: defining a mechanism, "how X works".
+     This is the workhorse slide for technical concepts (RNN, attention, etc.). -->
+<section class="slide" data-template="concept-explainer">
+  <p class="eyebrow an up" style="--i:0">RESEARCH QUESTION</p>
+  <h2 class="an up" style="--i:1">Does K=1 hit a fundamental ceiling?</h2>
+  <div class="grid cols-2" style="margin-top:0.6em; align-items:center;">
+    <ul style="list-style:none; display:flex; flex-direction:column; gap:0.6em;">
+      <li class="an right" style="--i:2"><strong class="accent">1.</strong> <strong class="accent">Theory:</strong> Does GCN's normalization create a self-dilution effect at high degree?</li>
+      <li class="an right" style="--i:3"><strong class="accent">2.</strong> <strong class="accent">Experiment:</strong> At matched edge budget, does <mark>K ≥ 2</mark> beat K=1 on raw ASR?</li>
+      <li class="an right" style="--i:4"><strong class="accent">3.</strong> <strong class="accent">Defense:</strong> Can single-node hide from per-node OOD / adjacency denoisers (<code>GDDM-A</code>)?</li>
+    </ul>
+    <div class="card an scale" style="--i:3; min-height:42%; align-items:center; justify-content:center; gap:0.6em;">
+      <span class="icon" data-lucide="help-circle" aria-hidden="true"></span>
+      <p class="caption">Three independent angles, one converging answer.</p>
+    </div>
+  </div>
+</section>
+
+<!-- TEMPLATE: concept-explainer — explain one idea with a staggered point list
+     plus a visual panel. Use for: defining a mechanism, "how X works".
+     This is the workhorse slide for technical concepts (RNN, attention, etc.). -->
+<section class="slide" data-template="concept-explainer">
+  <p class="eyebrow an up" style="--i:0">THEORY</p>
+  <h2 class="an up" style="--i:1">GCN self-dilution at high degree</h2>
+  <div class="grid cols-2" style="margin-top:0.6em; align-items:center;">
+    <ul style="list-style:none; display:flex; flex-direction:column; gap:0.6em;">
+      <li class="an right" style="--i:2"><strong class="accent">1.</strong> Normalized aggregation: <code>Ã = D<sup>-1/2</sup> A D<sup>-1/2</sup></code> (symmetric).</li>
+      <li class="an right" style="--i:3"><strong class="accent">2.</strong> Per-edge message weight <code>(v*, u)</code> is <mark>1 / √(deg(v*) · deg(u))</mark>.</li>
+      <li class="an right" style="--i:4"><strong class="accent">3.</strong> As <code>deg(v*) → N</code>, each edge contributes <strong class="warn">O(1/√N)</strong> — the node dilutes its own influence.</li>
+    </ul>
+    <div class="card an scale" style="--i:3; min-height:42%; align-items:center; justify-content:center; gap:0.6em;">
+      <span class="icon" data-lucide="function-square" aria-hidden="true"></span>
+      <p class="caption">h_{v*}⁽ˡ⁺¹⁾ = σ( Σ_u 1/√(N · deg(u)) · h_u⁽ˡ⁾ W )</p>
+    </div>
+  </div>
+</section>
+
+<!-- TEMPLATE: comparison — A vs B.
+     Use for: trade-offs, before/after, two competing methods or models. -->
+<section class="slide" data-template="comparison">
+  <p class="eyebrow an up" style="--i:0">DESIGN CHOICE</p>
+  <h2 class="an up" style="--i:1">K=1 single node <span class="warn">vs</span> K=3 multi-node</h2>
+  <div class="vs" style="margin-top:0.6em;">
+    <div class="card an right" style="--i:2; --accent:#4f8cff;">
+      <span class="icon" data-lucide="circle-check" aria-hidden="true"></span>
+      <h3>K=1 single node</h3>
+      <p>Simplest threat model. One feature vector, one edge mask.</p>
+      <p>Self-dilution: more edges → weaker per-edge signal. Degree-N spike triggers per-node anomaly detection.</p>
+    </div>
+    <div class="badge an scale" style="--i:3">VS</div>
+    <div class="card an left" style="--i:2; --accent:#36d399;">
+      <span class="icon" data-lucide="circle-check" aria-hidden="true" style="color:var(--accent-2)"></span>
+      <h3>K=3 multi-node</h3>
+      <p>Distributes edge budget across nodes. Each node degree ≈ clean median; inter-node edges form a sub-community.</p>
+      <p>More queries to optimize. Need partition strategy + independent per-node feature optimization.</p>
+    </div>
+  </div>
+  <p class="caption an fade" style="--i:5">Takeaway: K=1 ceiling exists. Multi-node distributes the degree, restoring per-edge influence and disguising the trojan.</p>
+</section>
+
+<!-- TEMPLATE: chart — quantitative data / metrics on one slide.
+     Use for: results, benchmarks, growth, before/after numbers, "show the data".
+     Lead with the INSIGHT (right card); the chart only supports it.
+
+     BEFORE filling this in, ask the design brain which chart type + colors fit:
+       python scripts/suggest_chart.py "monthly active users growth over time"
+     It queries the ui-ux-pro-max skill (charts.csv: 25 chart types) and prints the
+     recommended Best Chart Type, Secondary Options, Color Guidance, When NOT to
+     Use, and Accessibility Notes.
+
+     The default below is an inline-SVG BAR chart (the most common deck case:
+     comparing categories). If suggest_chart.py recommends another type
+     (line / area / pie / ...), replace the <svg> with that shape — keep it INLINE
+     SVG so the deck stays a single portable file and screenshots cleanly to .pptx.
+     To draw bars: set each <rect> height=h and y=262-h; update its value + label.
+     Each bar carries class="an fade" + style="--i:N" so they cascade in; for a
+     frame-accurate bar-grow, add a GSAP timeline (see animation-patterns.md). -->
+<section class="slide" data-template="chart">
+  <p class="eyebrow an up" style="--i:0">EXPERIMENT 1 — ASR CEILING</p>
+  <h2 class="an up" style="--i:1">K=1 ASR drops when you add edges (signature of self-dilution)</h2>
+  <div class="grid" style="grid-template-columns: 1.5fr 1fr; gap: 1.4em; align-items: center; margin-top: 0.3em;">
+
+    <!-- LEFT: chart stage (inline SVG; themeable via fill:var(--accent)) -->
+    <figure style="margin: 0;">
+      <svg viewBox="0 0 520 320" role="img" aria-labelledby="chart-title chart-desc" style="width: 100%; height: auto;">
+        <title id="chart-title">PROTEINS ASR vs node count at matched edge budget</title>
+        <desc id="chart-desc">Bar chart comparing ASR at 4 configurations: K=1 τ=0.5, K=1 τ=1.0, K=3 partition τ=0.5, K=3 partition τ=1.0</desc>
+        <!-- baseline -->
+        <line x1="48" y1="262" x2="500" y2="262" stroke="var(--line)" stroke-width="2"/>
+        <!-- bars: height=h, y=262-h. Highlight the key bar with --accent-2. -->
+        <rect class="an fade" style="--i:3" x="70"  y="142" width="70" height="120" rx="6" fill="var(--accent)"/>
+        <rect class="an fade" style="--i:4" x="180" y="102" width="70" height="160" rx="6" fill="var(--accent)"/>
+        <rect class="an fade" style="--i:5" x="290" y="62"  width="70" height="200" rx="6" fill="var(--accent-2)"/>
+        <rect class="an fade" style="--i:6" x="400" y="172" width="70" height="90"  rx="6" fill="var(--accent)"/>
+        <!-- value labels (>= 12px floor; --fs-caption keeps them legible) -->
+        <g fill="var(--ink)" text-anchor="middle" style="font-size: var(--fs-caption); font-weight: 700;">
+          <text class="an fade" style="--i:3" x="105" y="132">93.3%</text>
+          <text class="an fade" style="--i:4" x="215" y="92">88.6%</text>
+          <text class="an fade" style="--i:5" x="325" y="52">98.1%</text>
+          <text class="an fade" style="--i:6" x="435" y="162">96.9%</text>
+        </g>
+        <!-- category labels -->
+        <g fill="var(--ink-soft)" text-anchor="middle" style="font-size: var(--fs-caption);">
+          <text x="105" y="288">K=1, τ=0.5</text>
+          <text x="215" y="288">K=1, τ=1.0</text>
+          <text x="325" y="288">K=3, τ=0.5</text>
+          <text x="435" y="288">K=3, τ=1.0</text>
+        </g>
+      </svg>
+      <figcaption class="caption an fade" style="--i:7; margin-top: 0.4em;">Source: multinode_20260524_061442.json — PROTEINS, GCN mean-pool, 5-fold.</figcaption>
+    </figure>
+
+    <!-- RIGHT: the insight (what the audience should remember) -->
+    <div class="card an left" style="--i:3;">
+      <span class="icon" data-lucide="trending-up" aria-hidden="true"></span>
+      <h3>K=1 drops 93.3% → 88.6% as edges double</h3>
+      <p>Adding edges to one node makes EACH edge weaker. K=3 partition delivers <strong>+4.8 to +8.4 pp</strong> over K=1 (paired).</p>
+      <p class="caption">Caveat: PROTEINS only; ENZYMES multi-node not yet measured.</p>
+    </div>
+  </div>
+</section>
+
+<!-- TEMPLATE: chart — quantitative data / metrics on one slide.
+     Use for: results, benchmarks, growth, before/after numbers, "show the data".
+     Lead with the INSIGHT (right card); the chart only supports it.
+
+     BEFORE filling this in, ask the design brain which chart type + colors fit:
+       python scripts/suggest_chart.py "monthly active users growth over time"
+     It queries the ui-ux-pro-max skill (charts.csv: 25 chart types) and prints the
+     recommended Best Chart Type, Secondary Options, Color Guidance, When NOT to
+     Use, and Accessibility Notes.
+
+     The default below is an inline-SVG BAR chart (the most common deck case:
+     comparing categories). If suggest_chart.py recommends another type
+     (line / area / pie / ...), replace the <svg> with that shape — keep it INLINE
+     SVG so the deck stays a single portable file and screenshots cleanly to .pptx.
+     To draw bars: set each <rect> height=h and y=262-h; update its value + label.
+     Each bar carries class="an fade" + style="--i:N" so they cascade in; for a
+     frame-accurate bar-grow, add a GSAP timeline (see animation-patterns.md). -->
+<section class="slide" data-template="chart">
+  <p class="eyebrow an up" style="--i:0">EXPERIMENT 1 — FULL GRID</p>
+  <h2 class="an up" style="--i:1">Partition strategy + multi-node consistently wins</h2>
+  <div class="grid" style="grid-template-columns: 1.5fr 1fr; gap: 1.4em; align-items: center; margin-top: 0.3em;">
+
+    <!-- LEFT: chart stage (inline SVG; themeable via fill:var(--accent)) -->
+    <figure style="margin: 0;">
+      <svg viewBox="0 0 520 320" role="img" aria-labelledby="chart-title chart-desc" style="width: 100%; height: auto;">
+        <title id="chart-title">PROTEINS GCN ASR by node count and allocation</title>
+        <desc id="chart-desc">Bar chart of 6 configurations: K=1 single, K=2 partition, K=2 interconnect, K=3 duplicate, K=3 partition, K=3 interconnect, all at τ=0.5</desc>
+        <!-- baseline -->
+        <line x1="48" y1="262" x2="500" y2="262" stroke="var(--line)" stroke-width="2"/>
+        <!-- bars: height=h, y=262-h. Highlight the key bar with --accent-2. -->
+        <rect class="an fade" style="--i:3" x="70"  y="142" width="70" height="120" rx="6" fill="var(--accent)"/>
+        <rect class="an fade" style="--i:4" x="180" y="102" width="70" height="160" rx="6" fill="var(--accent)"/>
+        <rect class="an fade" style="--i:5" x="290" y="62"  width="70" height="200" rx="6" fill="var(--accent-2)"/>
+        <rect class="an fade" style="--i:6" x="400" y="172" width="70" height="90"  rx="6" fill="var(--accent)"/>
+        <!-- value labels (>= 12px floor; --fs-caption keeps them legible) -->
+        <g fill="var(--ink)" text-anchor="middle" style="font-size: var(--fs-caption); font-weight: 700;">
+          <text class="an fade" style="--i:3" x="105" y="132">88.6</text>
+          <text class="an fade" style="--i:4" x="215" y="92">94.3</text>
+          <text class="an fade" style="--i:5" x="325" y="52">98.1</text>
+          <text class="an fade" style="--i:6" x="435" y="162">97.0</text>
+        </g>
+        <!-- category labels -->
+        <g fill="var(--ink-soft)" text-anchor="middle" style="font-size: var(--fs-caption);">
+          <text x="105" y="288">K=1</text>
+          <text x="215" y="288">K=2 part.</text>
+          <text x="325" y="288">K=3 part.</text>
+          <text x="435" y="288">K=3 inter.</text>
+        </g>
+      </svg>
+      <figcaption class="caption an fade" style="--i:7; margin-top: 0.4em;">Source: multinode_20260524 PROTEINS 5-fold zo_free τ=1.0, mean across folds.</figcaption>
+    </figure>
+
+    <!-- RIGHT: the insight (what the audience should remember) -->
+    <div class="card an left" style="--i:3;">
+      <span class="icon" data-lucide="trending-up" aria-hidden="true"></span>
+      <h3>K=3 partition: 98.1% (best), q/g = 188</h3>
+      <p><strong>partition &gt; duplicate</strong>: independent edge masks beat shared edges. Synergy of edge-split + independent feature optimization is essential.</p>
+      <p class="caption">Caveat: cost grows ~2x in queries; manifold (fixed) features show opposite ordering.</p>
+    </div>
+  </div>
+</section>
+
+<!-- TEMPLATE: chart — quantitative data / metrics on one slide.
+     Use for: results, benchmarks, growth, before/after numbers, "show the data".
+     Lead with the INSIGHT (right card); the chart only supports it.
+
+     BEFORE filling this in, ask the design brain which chart type + colors fit:
+       python scripts/suggest_chart.py "monthly active users growth over time"
+     It queries the ui-ux-pro-max skill (charts.csv: 25 chart types) and prints the
+     recommended Best Chart Type, Secondary Options, Color Guidance, When NOT to
+     Use, and Accessibility Notes.
+
+     The default below is an inline-SVG BAR chart (the most common deck case:
+     comparing categories). If suggest_chart.py recommends another type
+     (line / area / pie / ...), replace the <svg> with that shape — keep it INLINE
+     SVG so the deck stays a single portable file and screenshots cleanly to .pptx.
+     To draw bars: set each <rect> height=h and y=262-h; update its value + label.
+     Each bar carries class="an fade" + style="--i:N" so they cascade in; for a
+     frame-accurate bar-grow, add a GSAP timeline (see animation-patterns.md). -->
+<section class="slide" data-template="chart">
+  <p class="eyebrow an up" style="--i:0">EXPERIMENT 2 — DEFENSE VULNERABILITY</p>
+  <h2 class="an up" style="--i:1">Single-node degree-N spike: universally caught by adjacency denoising</h2>
+  <div class="grid" style="grid-template-columns: 1.5fr 1fr; gap: 1.4em; align-items: center; margin-top: 0.3em;">
+
+    <!-- LEFT: chart stage (inline SVG; themeable via fill:var(--accent)) -->
+    <figure style="margin: 0;">
+      <svg viewBox="0 0 520 320" role="img" aria-labelledby="chart-title chart-desc" style="width: 100%; height: auto;">
+        <title id="chart-title">PROTEINS ASR under GDDM-A (adjacency Binomial denoising)</title>
+        <desc id="chart-desc">Bar chart of 4 single-node attack variants under GDDM-A defense on PROTEINS</desc>
+        <!-- baseline -->
+        <line x1="48" y1="262" x2="500" y2="262" stroke="var(--line)" stroke-width="2"/>
+        <!-- bars: height=h, y=262-h. Highlight the key bar with --accent-2. -->
+        <rect class="an fade" style="--i:3" x="70"  y="142" width="70" height="120" rx="6" fill="var(--accent)"/>
+        <rect class="an fade" style="--i:4" x="180" y="102" width="70" height="160" rx="6" fill="var(--accent)"/>
+        <rect class="an fade" style="--i:5" x="290" y="62"  width="70" height="200" rx="6" fill="var(--accent-2)"/>
+        <rect class="an fade" style="--i:6" x="400" y="172" width="70" height="90"  rx="6" fill="var(--accent)"/>
+        <!-- value labels (>= 12px floor; --fs-caption keeps them legible) -->
+        <g fill="var(--ink)" text-anchor="middle" style="font-size: var(--fs-caption); font-weight: 700;">
+          <text class="an fade" style="--i:3" x="105" y="132">1.000</text>
+          <text class="an fade" style="--i:4" x="215" y="92">0.975</text>
+          <text class="an fade" style="--i:5" x="325" y="52">0.175</text>
+          <text class="an fade" style="--i:6" x="435" y="162">0.067</text>
+        </g>
+        <!-- category labels -->
+        <g fill="var(--ink-soft)" text-anchor="middle" style="font-size: var(--fs-caption);">
+          <text x="105" y="288">zo_free</text>
+          <text x="215" y="288">zo_free+def</text>
+          <text x="325" y="288">SGDI+def</text>
+          <text x="435" y="288">SpecGDI+def</text>
+        </g>
+      </svg>
+      <figcaption class="caption an fade" style="--i:7; margin-top: 0.4em;">Source: smoke_gddm_a.py PROTEINS fold 0, n=40.</figcaption>
+    </figure>
+
+    <!-- RIGHT: the insight (what the audience should remember) -->
+    <div class="card an left" style="--i:3;">
+      <span class="icon" data-lucide="trending-up" aria-hidden="true"></span>
+      <h3>SGDI: 0.975 → 0.175 (−80pp)</h3>
+      <p>Even <strong>spectrum-preservation</strong> (SpecGDI v1) can't save single-node: <code>0.067</code>. Defender wins regardless of feature/spectral stealth.</p>
+      <p class="caption">Caveat: SpecGDI v1 attack designed for single-node; the failure mode is structural to K=1.</p>
+    </div>
+  </div>
+</section>
+
+<!-- TEMPLATE: concept-explainer — explain one idea with a staggered point list
+     plus a visual panel. Use for: defining a mechanism, "how X works".
+     This is the workhorse slide for technical concepts (RNN, attention, etc.). -->
+<section class="slide" data-template="concept-explainer">
+  <p class="eyebrow an up" style="--i:0">DEFENSE MECHANISM</p>
+  <h2 class="an up" style="--i:1">Per-node anomaly dominates</h2>
+  <div class="grid cols-2" style="margin-top:0.6em; align-items:center;">
+    <ul style="list-style:none; display:flex; flex-direction:column; gap:0.6em;">
+      <li class="an right" style="--i:2"><strong class="accent">1.</strong> Denoisers and OOD detectors score each node <strong>independently</strong>.</li>
+      <li class="an right" style="--i:3"><strong class="accent">2.</strong> A node of <mark>degree N</mark> in a graph with median degree ≈ 4 is a <strong>9-15σ outlier on degree alone</strong>.</li>
+      <li class="an right" style="--i:4"><strong class="accent">3.</strong> No amount of feature or spectral whitening can hide a single-node degree spike from <code>per-node</code> scoring.</li>
+    </ul>
+    <div class="card an scale" style="--i:3; min-height:42%; align-items:center; justify-content:center; gap:0.6em;">
+      <span class="icon" data-lucide="alert-triangle" aria-hidden="true"></span>
+      <p class="caption">z-score(deg(v*)) = (N − μ_deg) / σ_deg ≈ 9 to 15</p>
+    </div>
+  </div>
+</section>
+
+<!-- TEMPLATE: concept-explainer — explain one idea with a staggered point list
+     plus a visual panel. Use for: defining a mechanism, "how X works".
+     This is the workhorse slide for technical concepts (RNN, attention, etc.). -->
+<section class="slide" data-template="concept-explainer">
+  <p class="eyebrow an up" style="--i:0">MITIGATION</p>
+  <h2 class="an up" style="--i:1">K-node trojan with community structure</h2>
+  <div class="grid cols-2" style="margin-top:0.6em; align-items:center;">
+    <ul style="list-style:none; display:flex; flex-direction:column; gap:0.6em;">
+      <li class="an right" style="--i:2"><strong class="accent">1.</strong> Distribute edge budget across K=3–5 nodes; each node degree ≈ clean median.</li>
+      <li class="an right" style="--i:3"><strong class="accent">2.</strong> Add <mark>inter-node edges</mark> A*<sub>VV</sub>: trojan looks like a natural sub-community.</li>
+      <li class="an right" style="--i:4"><strong class="accent">3.</strong> Caveat: <code>SpecGDI v2</code> K=3 didn't fully rescue ASR — denoiser scores per-edge, not per-cluster gestalt.</li>
+    </ul>
+    <div class="card an scale" style="--i:3; min-height:42%; align-items:center; justify-content:center; gap:0.6em;">
+      <span class="icon" data-lucide="layers" aria-hidden="true"></span>
+      <p class="caption">trojan subgraph ≈ (clean community: density, degree, internal spectrum)</p>
+    </div>
+  </div>
+</section>
+
+<!-- TEMPLATE: chart — quantitative data / metrics on one slide.
+     Use for: results, benchmarks, growth, before/after numbers, "show the data".
+     Lead with the INSIGHT (right card); the chart only supports it.
+
+     BEFORE filling this in, ask the design brain which chart type + colors fit:
+       python scripts/suggest_chart.py "monthly active users growth over time"
+     It queries the ui-ux-pro-max skill (charts.csv: 25 chart types) and prints the
+     recommended Best Chart Type, Secondary Options, Color Guidance, When NOT to
+     Use, and Accessibility Notes.
+
+     The default below is an inline-SVG BAR chart (the most common deck case:
+     comparing categories). If suggest_chart.py recommends another type
+     (line / area / pie / ...), replace the <svg> with that shape — keep it INLINE
+     SVG so the deck stays a single portable file and screenshots cleanly to .pptx.
+     To draw bars: set each <rect> height=h and y=262-h; update its value + label.
+     Each bar carries class="an fade" + style="--i:N" so they cascade in; for a
+     frame-accurate bar-grow, add a GSAP timeline (see animation-patterns.md). -->
+<section class="slide" data-template="chart">
+  <p class="eyebrow an up" style="--i:0">LITERATURE CONSENSUS</p>
+  <h2 class="an up" style="--i:1">All recent GIA stealth literature has moved to multi-node</h2>
+  <div class="grid" style="grid-template-columns: 1.5fr 1fr; gap: 1.4em; align-items: center; margin-top: 0.3em;">
+
+    <!-- LEFT: chart stage (inline SVG; themeable via fill:var(--accent)) -->
+    <figure style="margin: 0;">
+      <svg viewBox="0 0 520 320" role="img" aria-labelledby="chart-title chart-desc" style="width: 100%; height: auto;">
+        <title id="chart-title">Multi-node injection adoption in recent GIA literature</title>
+        <desc id="chart-desc">Five recent papers with default node count: HAO, TDGIA, GANI, JANUS, QUGIA</desc>
+        <!-- baseline -->
+        <line x1="48" y1="262" x2="500" y2="262" stroke="var(--line)" stroke-width="2"/>
+        <!-- bars: height=h, y=262-h. Highlight K=1 baseline with --warn red. -->
+        <rect class="an fade" style="--i:3" x="70"  y="242" width="70" height="20"  rx="6" fill="#ef4444"/>
+        <rect class="an fade" style="--i:4" x="180" y="162" width="70" height="100" rx="6" fill="var(--accent)"/>
+        <rect class="an fade" style="--i:5" x="290" y="92"  width="70" height="170" rx="6" fill="var(--accent)"/>
+        <rect class="an fade" style="--i:6" x="400" y="142" width="70" height="120" rx="6" fill="var(--accent-2)"/>
+        <!-- value labels (>= 12px floor; --fs-caption keeps them legible) -->
+        <g fill="var(--ink)" text-anchor="middle" style="font-size: var(--fs-caption); font-weight: 700;">
+          <text class="an fade" style="--i:3" x="105" y="232">K=1</text>
+          <text class="an fade" style="--i:4" x="215" y="152">K~5</text>
+          <text class="an fade" style="--i:5" x="325" y="82">K~30</text>
+          <text class="an fade" style="--i:6" x="435" y="132">K~10</text>
+        </g>
+        <!-- category labels -->
+        <g fill="var(--ink-soft)" text-anchor="middle" style="font-size: var(--fs-caption);">
+          <text x="105" y="288">KATZE/SGDI</text>
+          <text x="215" y="288">HAO '22</text>
+          <text x="325" y="288">TDGIA '21</text>
+          <text x="435" y="288">JANUS '25</text>
+        </g>
+      </svg>
+      <figcaption class="caption an fade" style="--i:7; margin-top: 0.4em;">Source: lit-search 2026-05-26; QUGIA '25 also multi-node (not shown).</figcaption>
+    </figure>
+
+    <!-- RIGHT: the insight (what the audience should remember) -->
+    <div class="card an left" style="--i:3;">
+      <span class="icon" data-lucide="trending-up" aria-hidden="true"></span>
+      <h3>Single-node is an outdated baseline</h3>
+      <p><strong>5/5 recent GIA stealth papers</strong> default to multi-node. KATZE/GZOO/SGDI single-node baselines no longer represent the field.</p>
+      <p class="caption">Caveat: each paper has different K and partition strategy.</p>
+    </div>
+  </div>
+</section>
+
+<!-- TEMPLATE: process-flow — sequential steps / pipeline.
+     Use for: algorithms, data pipelines, training loops, request lifecycles.
+     Steps cascade left-to-right; arrows pop in between them. -->
+<section class="slide" data-template="process-flow">
+  <p class="eyebrow an up" style="--i:0">CONCLUSION</p>
+  <h2 class="an up" style="--i:1">Three converging arguments → multi-node is necessary</h2>
+  <div class="flow" style="margin-top:0.8em;">
+    <div class="card step an up" style="--i:2">
+      <span class="icon" data-lucide="download" aria-hidden="true"></span>
+      <h3>Theory</h3><p class="caption">GCN self-dilution: O(1/√N) per-edge influence</p>
+    </div>
+    <div class="arrow an scale" style="--i:3" data-lucide="arrow-right" aria-hidden="true"></div>
+    <div class="card step an up" style="--i:4">
+      <span class="icon" data-lucide="cpu" aria-hidden="true"></span>
+      <h3>Experiment</h3><p class="caption">K=3 partition: +8.4 pp over K=1 (matched budget)</p>
+    </div>
+    <div class="arrow an scale" style="--i:5" data-lucide="arrow-right" aria-hidden="true"></div>
+    <div class="card step an up" style="--i:6">
+      <span class="icon" data-lucide="check-circle" aria-hidden="true"></span>
+      <h3>Defense</h3><p class="caption">K=1 universally collapses under per-node OOD</p>
+    </div>
+  </div>
+  <p class="caption an fade" style="--i:8">Future work: community-structure stealth + per-node spectral fingerprint adversarial training.</p>
+</section>
+  </main>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>if (window.lucide) lucide.createIcons();</script>
+  <script>/* ============================================================
+   katze-ppt-skill — deck.js
+   Carousel controller for animated 16:9 decks.
+
+   Responsibilities:
+   - Slide navigation (buttons, keyboard, swipe, URL hash).
+   - Progress bar + slide counter.
+   - Animation RESET on every slide change via the cloneNode trick.
+
+   Why cloneNode: CSS `animation-fill-mode: forwards` plays an animation
+   exactly once. Toggling display/visibility does NOT replay it. Cloning
+   the node and swapping it in forces the browser to re-evaluate the
+   animation from scratch — the most cross-browser-reliable reset.
+   (Technique adapted from Unclecheng-li/AI-Animation-Skill.)
+   ============================================================ */
+(function () {
+  "use strict";
+
+  function ready(fn) {
+    if (document.readyState !== "loading") fn();
+    else document.addEventListener("DOMContentLoaded", fn);
+  }
+
+  ready(function () {
+    var deck = document.querySelector(".deck");
+    if (!deck) return;
+    var slides = Array.prototype.slice.call(deck.querySelectorAll(".slide"));
+    if (!slides.length) return;
+
+    var index = 0;
+
+    // ---- Chrome elements ----
+    var progress = document.createElement("div");
+    progress.className = "kp-progress";
+    document.body.appendChild(progress);
+
+    var counter = document.createElement("div");
+    counter.className = "kp-counter";
+    document.body.appendChild(counter);
+
+    var nav = document.createElement("div");
+    nav.className = "kp-nav";
+    nav.innerHTML =
+      '<button data-act="prev" aria-label="Previous slide">&#8592;</button>' +
+      '<button data-act="next" aria-label="Next slide">&#8594;</button>';
+    document.body.appendChild(nav);
+    nav.addEventListener("click", function (e) {
+      var b = e.target.closest("button");
+      if (!b) return;
+      if (b.dataset.act === "next") go(index + 1);
+      else go(index - 1);
+    });
+
+    // ---- Animation reset: re-trigger every .an / .anim-item in a slide ----
+    function resetAnimations(slide) {
+      var items = slide.querySelectorAll(".an, .anim-item, [style*='animation']");
+      items.forEach(function (item) {
+        var clone = item.cloneNode(true);
+        item.parentNode.replaceChild(clone, item);
+      });
+    }
+
+    function clamp(i) { return Math.max(0, Math.min(slides.length - 1, i)); }
+
+    function render() {
+      slides.forEach(function (s, i) {
+        s.classList.toggle("is-active", i === index);
+      });
+      var active = slides[index];
+      resetAnimations(active);
+      var pct = slides.length > 1 ? (index / (slides.length - 1)) * 100 : 100;
+      progress.style.width = pct + "%";
+      counter.textContent = (index + 1) + " / " + slides.length;
+      if (history.replaceState) history.replaceState(null, "", "#" + (index + 1));
+      deck.dispatchEvent(new CustomEvent("slidechange", { detail: { index: index } }));
+    }
+
+    function go(i) {
+      var next = clamp(i);
+      if (next === index) { resetAnimations(slides[index]); return; }
+      index = next;
+      render();
+    }
+
+    // ---- Keyboard ----
+    document.addEventListener("keydown", function (e) {
+      switch (e.key) {
+        case "ArrowRight":
+        case "PageDown":
+        case " ":
+          e.preventDefault(); go(index + 1); break;
+        case "ArrowLeft":
+        case "PageUp":
+          e.preventDefault(); go(index - 1); break;
+        case "Home": e.preventDefault(); go(0); break;
+        case "End": e.preventDefault(); go(slides.length - 1); break;
+        case "f": case "F":
+          if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+          else document.exitFullscreen();
+          break;
+      }
+    });
+
+    // ---- Touch swipe ----
+    var sx = 0;
+    deck.addEventListener("touchstart", function (e) { sx = e.touches[0].clientX; }, { passive: true });
+    deck.addEventListener("touchend", function (e) {
+      var dx = e.changedTouches[0].clientX - sx;
+      if (Math.abs(dx) > 50) go(index + (dx < 0 ? 1 : -1));
+    }, { passive: true });
+
+    // ---- Deep link (#3 opens slide 3) ----
+    var fromHash = parseInt((location.hash || "").replace("#", ""), 10);
+    if (!isNaN(fromHash)) index = clamp(fromHash - 1);
+
+    render();
+
+    // Expose a tiny API (used by export_pptx.py via page.evaluate).
+    window.KP_DECK = {
+      total: slides.length,
+      goto: function (i) { go(i); },
+      next: function () { go(index + 1); },
+      current: function () { return index; }
+    };
+  });
+})();
+</script>
+</body>
+</html>

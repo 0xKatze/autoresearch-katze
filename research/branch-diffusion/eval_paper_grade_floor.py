@@ -155,6 +155,38 @@ def build_defended(model, defense, ref_graphs):
     raise ValueError(defense)
 
 
+def defended_correct(victim, data, device):
+    """FIX1: True iff the (possibly DEFENDED) `victim` classifies the CLEAN graph
+    correctly pre-attack (defended margin > 0).
+
+    The floor metric must gate on the DEFENDED model's pre-attack prediction, not the
+    base (no-defense) model's. Graphs the defense ITSELF misclassifies at baseline
+    (defended-margin < 0) must be excluded from BOTH the ASR numerator and denominator,
+    otherwise a defense that drops clean accuracy (e.g. bi-smoothing 0.72 -> ~0.63)
+    donates spurious "flips" that inflate the worst-case-defense floor. The pre-screen is
+    a defense-side query, run OUTSIDE QueryCounter, so it is NOT charged to the attack.
+    """
+    d = data
+    if getattr(d, "batch", None) is None:
+        d = d.clone()
+        d.batch = torch.zeros(d.num_nodes, dtype=torch.long, device=d.x.device)
+    with torch.no_grad():
+        pred = int(victim(d).argmax(dim=-1).item())
+    return pred == int(d.y.item())
+
+
+def eligible_graphs(victim, graphs, device):
+    """FIX1: subset of `graphs` the DEFENDED `victim` classifies correctly pre-attack.
+
+    For the 'none' defense victim==base model and `graphs` are already base-correct
+    (collect_test_graphs), so eligible == graphs and the path is unchanged (base-correct
+    == defended-correct). For an effective defense d, eligible = defended-correct graphs,
+    giving ASR_d = (# eligible flipped) / (# eligible) — each defense with its OWN
+    defended-correct denominator; floor = min_d ASR_d.
+    """
+    return [g for g in graphs if defended_correct(victim, g, device)]
+
+
 def om2c_greedy_flip(model, data, prior, cfg, device):
     """Channel-(a) on-manifold feature opt + channel-(b) SPARSE greedy regime, composed
     from OM2C's OWN functions (om2c_attack_graph lines 270-307). Skips the dense
@@ -193,6 +225,15 @@ def om2c_greedy_flip(model, data, prior, cfg, device):
 
 
 def run_attack_cell(run_key, overrides, victim, graphs, om2c_prior_cache):
+    # FIX1 (baseline-margin gating): the ASR denominator for THIS (attack, defense) cell
+    # is the DEFENDED-correct eligible set, not the base-correct set. Graphs the defense
+    # itself already misclassifies pre-attack are excluded from numerator AND denominator
+    # (no free flips). For 'none' victim==base model => eligible==graphs => path unchanged.
+    # Both attack entry points (flow/sgdi run_attack -> n_success/len(test_graphs); om2c
+    # loop below) use len(eligible) as the denominator, so filtering the input list here
+    # is sufficient and no attack code is touched.
+    eligible = eligible_graphs(victim, graphs, DEVICE)
+    n_total = len(graphs); n_elig = len(eligible)
     if run_key in ("sgdi", "flow", "flowb"):
         mod = {"sgdi": sgdi_attack, "flow": attack_flow, "flowb": attack_flow_b}[run_key]
         saved = {k: mod.CONFIG.get(k) for k in overrides}
@@ -200,11 +241,12 @@ def run_attack_cell(run_key, overrides, victim, graphs, om2c_prior_cache):
         nb = nt = 0
         try:
             with QueryCounter(victim) as qc:
-                asr = mod.run_attack(victim, graphs, DEVICE)
+                asr = mod.run_attack(victim, eligible, DEVICE) if eligible else 0.0
             if run_key in ("flow", "flowb"):
                 st = getattr(mod, "FLOW_STATS", None)
                 if st: nb, nt = int(st.get("in_ball", 0)), int(st.get("total", 0))
-            return {"asr": asr, "q": qc.n, "in_ball": nb, "in_ball_total": nt, "extra": {}}
+            return {"asr": asr, "q": qc.n, "in_ball": nb, "in_ball_total": nt,
+                    "n_eligible": n_elig, "n_total": n_total, "extra": {}}
         finally:
             mod.CONFIG.update(saved)
     elif run_key == "om2c":
@@ -213,13 +255,14 @@ def run_attack_cell(run_key, overrides, victim, graphs, om2c_prior_cache):
         prior = om2c_prior_cache
         max_deg = 0; flips = 0; edges = []
         with QueryCounter(victim) as qc:
-            for g in graphs:
+            for g in eligible:
                 fl, ne, md = om2c_greedy_flip(victim, g.to(DEVICE), prior, cfg, DEVICE)
                 flips += int(fl); max_deg = max(max_deg, md)
                 if ne is not None: edges.append(ne)
-        asr = flips / max(len(graphs), 1)
+        asr = flips / n_elig if n_elig else 0.0
         return {"asr": asr, "q": qc.n,
                 "in_ball": O.OM2C_STATS["in_ball"], "in_ball_total": O.OM2C_STATS["total"],
+                "n_eligible": n_elig, "n_total": n_total,
                 "extra": {"max_inj_degree": max_deg,
                           "median_edges_at_flip": (sorted(edges)[len(edges)//2] if edges else None)}}
     raise ValueError(run_key)

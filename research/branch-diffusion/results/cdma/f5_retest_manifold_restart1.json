@@ -1,0 +1,267 @@
+{
+  "script": "F5 re-test: is the unconstrained-SGDI defended floor just the trivial mean-injection baseline?",
+  "attack_cfg": {
+    "node_budget": 1,
+    "skip_greedy": true,
+    "zo_epochs": 20,
+    "zo_restarts": 2
+  },
+  "seeds": [
+    0,
+    1
+  ],
+  "cells": {
+    "PROTEINS|none|manifold (mu only, no opt)": {
+      "asr_mean": 0.5989961704961705,
+      "asr_std": 0.040975432654029205,
+      "asr_obs": [
+        0.6218,
+        0.5697,
+        0.5371,
+        0.6125,
+        0.6538,
+        0.6218,
+        0.5697,
+        0.5371,
+        0.6125,
+        0.6538
+      ],
+      "feat_mode": "manifold",
+      "extra_cfg": {},
+      "projection_off": false
+    },
+    "PROTEINS|none|sgdi bare r=1": {
+      "asr_mean": 0.8400188145188145,
+      "asr_std": 0.07180117984223588,
+      "asr_obs": [
+        0.7885,
+        0.7576,
+        0.8114,
+        0.8875,
+        0.9551,
+        0.7885,
+        0.7576,
+        0.8114,
+        0.8875,
+        0.9551
+      ],
+      "feat_mode": "sgdi",
+      "extra_cfg": {
+        "sgdi_eta": 0.0,
+        "sgdi_temp": 0.0,
+        "zo_restarts": 1
+      },
+      "projection_off": true
+    },
+    "PROTEINS|none|zo_free r=1": {
+      "asr_mean": 0.8400188145188145,
+      "asr_std": 0.07180117984223588,
+      "asr_obs": [
+        0.7885,
+        0.7576,
+        0.8114,
+        0.8875,
+        0.9551,
+        0.7885,
+        0.7576,
+        0.8114,
+        0.8875,
+        0.9551
+      ],
+      "feat_mode": "zo_free",
+      "extra_cfg": {
+        "zo_restarts": 1
+      },
+      "projection_off": false
+    },
+    "PROTEINS|mahalanobis|manifold (mu only, no opt)": {
+      "asr_mean": 0.5989961704961705,
+      "asr_std": 0.040975432654029205,
+      "asr_obs": [
+        0.6218,
+        0.5697,
+        0.5371,
+        0.6125,
+        0.6538,
+        0.6218,
+        0.5697,
+        0.5371,
+        0.6125,
+        0.6538
+      ],
+      "feat_mode": "manifold",
+      "extra_cfg": {},
+      "projection_off": false
+    },
+    "PROTEINS|mahalanobis|sgdi bare r=1": {
+      "asr_mean": 0.6013511488511488,
+      "asr_std": 0.03840455170962793,
+      "asr_obs": [
+        0.6218,
+        0.5758,
+        0.5429,
+        0.6125,
+        0.6538,
+        0.6218,
+        0.5758,
+        0.5429,
+        0.6125,
+        0.6538
+      ],
+      "feat_mode": "sgdi",
+      "extra_cfg": {
+        "sgdi_eta": 0.0,
+        "sgdi_temp": 0.0,
+        "zo_restarts": 1
+      },
+      "projection_off": true
+    },
+    "PROTEINS|mahalanobis|zo_free r=1": {
+      "asr_mean": 0.04048684648684649,
+      "asr_std": 0.06868802162752437,
+      "asr_obs": [
+        0.0192,
+        0.0061,
+        0.1771,
+        0.0,
+        0.0,
+        0.0192,
+        0.0061,
+        0.1771,
+        0.0,
+        0.0
+      ],
+      "feat_mode": "zo_free",
+      "extra_cfg": {
+        "zo_restarts": 1
+      },
+      "projection_off": false
+    },
+    "ENZYMES|none|manifold (mu only, no opt)": {
+      "asr_mean": 0.11598446799559878,
+      "asr_std": 0.0400401748864449,
+      "asr_obs": [
+        0.0847,
+        0.1282,
+        0.0556,
+        0.1622,
+        0.1493,
+        0.0847,
+        0.1282,
+        0.0556,
+        0.1622,
+        0.1493
+      ],
+      "feat_mode": "manifold",
+      "extra_cfg": {},
+      "projection_off": false
+    },
+    "ENZYMES|none|sgdi bare r=1": {
+      "asr_mean": 0.9229648152112103,
+      "asr_std": 0.062972544431356,
+      "asr_obs": [
+        0.8305,
+        0.8718,
+        0.9722,
+        1.0,
+        0.9403,
+        0.8305,
+        0.8718,
+        0.9722,
+        1.0,
+        0.9403
+      ],
+      "feat_mode": "sgdi",
+      "extra_cfg": {
+        "sgdi_eta": 0.0,
+        "sgdi_temp": 0.0,
+        "zo_restarts": 1
+      },
+      "projection_off": true
+    },
+    "ENZYMES|none|zo_free r=1": {
+      "asr_mean": 0.9229648152112103,
+      "asr_std": 0.062972544431356,
+      "asr_obs": [
+        0.8305,
+        0.8718,
+        0.9722,
+        1.0,
+        0.9403,
+        0.8305,
+        0.8718,
+        0.9722,
+        1.0,
+        0.9403
+      ],
+      "feat_mode": "zo_free",
+      "extra_cfg": {
+        "zo_restarts": 1
+      },
+      "projection_off": false
+    },
+    "ENZYMES|mahalanobis|manifold (mu only, no opt)": {
+      "asr_mean": 0.14447875408538197,
+      "asr_std": 0.036224239909402,
+      "asr_obs": [
+        0.1186,
+        0.1282,
+        0.125,
+        0.2162,
+        0.1343,
+        0.1186,
+        0.1282,
+        0.125,
+        0.2162,
+        0.1343
+      ],
+      "feat_mode": "manifold",
+      "extra_cfg": {},
+      "projection_off": false
+    },
+    "ENZYMES|mahalanobis|sgdi bare r=1": {
+      "asr_mean": 0.2378957222999722,
+      "asr_std": 0.05830280274864652,
+      "asr_obs": [
+        0.3051,
+        0.1538,
+        0.1944,
+        0.2973,
+        0.2388,
+        0.3051,
+        0.1538,
+        0.1944,
+        0.2973,
+        0.2388
+      ],
+      "feat_mode": "sgdi",
+      "extra_cfg": {
+        "sgdi_eta": 0.0,
+        "sgdi_temp": 0.0,
+        "zo_restarts": 1
+      },
+      "projection_off": true
+    },
+    "ENZYMES|mahalanobis|zo_free r=1": {
+      "asr_mean": 0.1974901106130552,
+      "asr_std": 0.049706450692638585,
+      "asr_obs": [
+        0.2542,
+        0.1154,
+        0.1806,
+        0.2432,
+        0.194,
+        0.2542,
+        0.1154,
+        0.1806,
+        0.2432,
+        0.194
+      ],
+      "feat_mode": "zo_free",
+      "extra_cfg": {
+        "zo_restarts": 1
+      },
+      "projection_off": false
+    }
+  }
+}

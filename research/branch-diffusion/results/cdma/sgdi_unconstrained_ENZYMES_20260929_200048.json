@@ -1,0 +1,319 @@
+{
+  "script": "eval_sgdi_unconstrained.py",
+  "timestamp": "20260929_200048",
+  "attack_cfg": {
+    "node_budget": 1,
+    "skip_greedy": true,
+    "zo_epochs": 20,
+    "zo_restarts": 2
+  },
+  "seeds": [
+    0,
+    1
+  ],
+  "device": "cpu",
+  "cells": [
+    {
+      "dataset": "ENZYMES",
+      "defense": "none",
+      "variant": "sgdi",
+      "feat_mode": "sgdi",
+      "extra_cfg": {},
+      "projection_off": false,
+      "asr_mean": 0.275493025961025,
+      "asr_std": 0.0675645703595757,
+      "asr_obs": [
+        0.3729,
+        0.2436,
+        0.1944,
+        0.2568,
+        0.3284,
+        0.3898,
+        0.2179,
+        0.1944,
+        0.2432,
+        0.3134
+      ],
+      "q_per_graph": 1307.219101914871,
+      "n_obs": 10
+    },
+    {
+      "dataset": "ENZYMES",
+      "defense": "none",
+      "variant": "sgdi_noproj",
+      "feat_mode": "sgdi",
+      "extra_cfg": {},
+      "projection_off": true,
+      "asr_mean": 0.9938274728054642,
+      "asr_std": 0.010100033010968023,
+      "asr_obs": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.9701,
+        0.9831,
+        1.0,
+        1.0,
+        1.0,
+        0.9851
+      ],
+      "q_per_graph": 149.83149492459825,
+      "n_obs": 10
+    },
+    {
+      "dataset": "ENZYMES",
+      "defense": "none",
+      "variant": "sgdi_noproj_noprior",
+      "feat_mode": "sgdi",
+      "extra_cfg": {
+        "sgdi_eta": 0.0
+      },
+      "projection_off": true,
+      "asr_mean": 0.9369396768871849,
+      "asr_std": 0.06148230114714398,
+      "asr_obs": [
+        0.8475,
+        0.9103,
+        1.0,
+        1.0,
+        0.9552,
+        0.8305,
+        0.8846,
+        0.9861,
+        1.0,
+        0.9552
+      ],
+      "q_per_graph": 352.2826841170599,
+      "n_obs": 10
+    },
+    {
+      "dataset": "ENZYMES",
+      "defense": "none",
+      "variant": "sgdi_free_x2",
+      "feat_mode": "sgdi",
+      "extra_cfg": {
+        "sgdi_eta": 0.0,
+        "feat_scale": "auto_x2"
+      },
+      "projection_off": true,
+      "asr_mean": 1.0,
+      "asr_std": 0.0,
+      "asr_obs": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "q_per_graph": 87.86260504798324,
+      "n_obs": 10
+    },
+    {
+      "dataset": "ENZYMES",
+      "defense": "none",
+      "variant": "zo_free",
+      "feat_mode": "zo_free",
+      "extra_cfg": {},
+      "projection_off": false,
+      "asr_mean": 0.9416115586777108,
+      "asr_std": 0.05508049212988288,
+      "asr_obs": [
+        0.8475,
+        0.9103,
+        1.0,
+        1.0,
+        0.9552,
+        0.8644,
+        0.8974,
+        0.9861,
+        1.0,
+        0.9552
+      ],
+      "q_per_graph": 314.70337731336974,
+      "n_obs": 10
+    },
+    {
+      "dataset": "ENZYMES",
+      "defense": "none",
+      "variant": "zo_free_x2",
+      "feat_mode": "zo_free",
+      "extra_cfg": {
+        "feat_scale": "auto_x2"
+      },
+      "projection_off": false,
+      "asr_mean": 1.0,
+      "asr_std": 0.0,
+      "asr_obs": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "q_per_graph": 50.220512820512816,
+      "n_obs": 10
+    },
+    {
+      "dataset": "ENZYMES",
+      "defense": "mahalanobis",
+      "variant": "sgdi",
+      "feat_mode": "sgdi",
+      "extra_cfg": {},
+      "projection_off": false,
+      "asr_mean": 0.29399660100077507,
+      "asr_std": 0.06561371412819704,
+      "asr_obs": [
+        0.4068,
+        0.2436,
+        0.2361,
+        0.3108,
+        0.3134,
+        0.4068,
+        0.2179,
+        0.2222,
+        0.2838,
+        0.2985
+      ],
+      "q_per_graph": 1274.9049754844941,
+      "n_obs": 10
+    },
+    {
+      "dataset": "ENZYMES",
+      "defense": "mahalanobis",
+      "variant": "sgdi_noproj",
+      "feat_mode": "sgdi",
+      "extra_cfg": {},
+      "projection_off": true,
+      "asr_mean": 0.23284472153369196,
+      "asr_std": 0.049533550450927326,
+      "asr_obs": [
+        0.2712,
+        0.1923,
+        0.1667,
+        0.2973,
+        0.2388,
+        0.2881,
+        0.1667,
+        0.1806,
+        0.2432,
+        0.2836
+      ],
+      "q_per_graph": 1395.6545315913706,
+      "n_obs": 10
+    },
+    {
+      "dataset": "ENZYMES",
+      "defense": "mahalanobis",
+      "variant": "sgdi_noproj_noprior",
+      "feat_mode": "sgdi",
+      "extra_cfg": {
+        "sgdi_eta": 0.0
+      },
+      "projection_off": true,
+      "asr_mean": 0.25235706356690424,
+      "asr_std": 0.056616466851233484,
+      "asr_obs": [
+        0.322,
+        0.2051,
+        0.1944,
+        0.2973,
+        0.2687,
+        0.3051,
+        0.1667,
+        0.1806,
+        0.2703,
+        0.3134
+      ],
+      "q_per_graph": 1372.9162611328466,
+      "n_obs": 10
+    },
+    {
+      "dataset": "ENZYMES",
+      "defense": "mahalanobis",
+      "variant": "sgdi_free_x2",
+      "feat_mode": "sgdi",
+      "extra_cfg": {
+        "sgdi_eta": 0.0,
+        "feat_scale": "auto_x2"
+      },
+      "projection_off": true,
+      "asr_mean": 0.14727274804431395,
+      "asr_std": 0.04050557401672156,
+      "asr_obs": [
+        0.1017,
+        0.1154,
+        0.1389,
+        0.2162,
+        0.1642,
+        0.1017,
+        0.1154,
+        0.1389,
+        0.2162,
+        0.1642
+      ],
+      "q_per_graph": 1480.0236015296855,
+      "n_obs": 10
+    },
+    {
+      "dataset": "ENZYMES",
+      "defense": "mahalanobis",
+      "variant": "zo_free",
+      "feat_mode": "zo_free",
+      "extra_cfg": {},
+      "projection_off": false,
+      "asr_mean": 0.1974901106130552,
+      "asr_std": 0.049706450692638585,
+      "asr_obs": [
+        0.2542,
+        0.1154,
+        0.1806,
+        0.2432,
+        0.194,
+        0.2542,
+        0.1154,
+        0.1806,
+        0.2432,
+        0.194
+      ],
+      "q_per_graph": 1397.7145901087024,
+      "n_obs": 10
+    },
+    {
+      "dataset": "ENZYMES",
+      "defense": "mahalanobis",
+      "variant": "zo_free_x2",
+      "feat_mode": "zo_free",
+      "extra_cfg": {
+        "feat_scale": "auto_x2"
+      },
+      "projection_off": false,
+      "asr_mean": 0.019767746886390953,
+      "asr_std": 0.01879816499890239,
+      "asr_obs": [
+        0.0169,
+        0.0128,
+        0.0556,
+        0.0135,
+        0.0,
+        0.0169,
+        0.0128,
+        0.0556,
+        0.0135,
+        0.0
+      ],
+      "q_per_graph": 1693.8494884715226,
+      "n_obs": 10
+    }
+  ]
+}

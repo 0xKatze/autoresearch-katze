@@ -1,0 +1,319 @@
+{
+  "script": "eval_sgdi_unconstrained.py",
+  "timestamp": "20260929_194010",
+  "attack_cfg": {
+    "node_budget": 1,
+    "skip_greedy": true,
+    "zo_epochs": 20,
+    "zo_restarts": 2
+  },
+  "seeds": [
+    0,
+    1
+  ],
+  "device": "cpu",
+  "cells": [
+    {
+      "dataset": "PROTEINS",
+      "defense": "none",
+      "variant": "sgdi",
+      "feat_mode": "sgdi",
+      "extra_cfg": {},
+      "projection_off": false,
+      "asr_mean": 0.6700994838494838,
+      "asr_std": 0.04455266352233144,
+      "asr_obs": [
+        0.6731,
+        0.6424,
+        0.6171,
+        0.6562,
+        0.75,
+        0.6731,
+        0.6364,
+        0.64,
+        0.6562,
+        0.7564
+      ],
+      "q_per_graph": 105.8231893939394,
+      "n_obs": 10
+    },
+    {
+      "dataset": "PROTEINS",
+      "defense": "none",
+      "variant": "sgdi_noproj",
+      "feat_mode": "sgdi",
+      "extra_cfg": {},
+      "projection_off": true,
+      "asr_mean": 0.6865696386946387,
+      "asr_std": 0.034169776862525,
+      "asr_obs": [
+        0.6859,
+        0.6545,
+        0.6686,
+        0.6562,
+        0.7436,
+        0.6859,
+        0.6606,
+        0.6914,
+        0.6625,
+        0.7564
+      ],
+      "q_per_graph": 101.05374533799532,
+      "n_obs": 10
+    },
+    {
+      "dataset": "PROTEINS",
+      "defense": "none",
+      "variant": "sgdi_noproj_noprior",
+      "feat_mode": "sgdi",
+      "extra_cfg": {
+        "sgdi_eta": 0.0
+      },
+      "projection_off": true,
+      "asr_mean": 0.8460483682983682,
+      "asr_std": 0.06878621317342001,
+      "asr_obs": [
+        0.7885,
+        0.7697,
+        0.8171,
+        0.8938,
+        0.9551,
+        0.7949,
+        0.7697,
+        0.8229,
+        0.8938,
+        0.9551
+      ],
+      "q_per_graph": 69.9162196969697,
+      "n_obs": 10
+    },
+    {
+      "dataset": "PROTEINS",
+      "defense": "none",
+      "variant": "sgdi_free_x2",
+      "feat_mode": "sgdi",
+      "extra_cfg": {
+        "sgdi_eta": 0.0,
+        "feat_scale": "auto_x2"
+      },
+      "projection_off": true,
+      "asr_mean": 0.6730055777555778,
+      "asr_std": 0.02691535886307298,
+      "asr_obs": [
+        0.6731,
+        0.6485,
+        0.6629,
+        0.6562,
+        0.7244,
+        0.6731,
+        0.6485,
+        0.6629,
+        0.6562,
+        0.7244
+      ],
+      "q_per_graph": 103.26947727272727,
+      "n_obs": 10
+    },
+    {
+      "dataset": "PROTEINS",
+      "defense": "none",
+      "variant": "zo_free",
+      "feat_mode": "zo_free",
+      "extra_cfg": {},
+      "projection_off": false,
+      "asr_mean": 0.8540359640359639,
+      "asr_std": 0.0677786041547825,
+      "asr_obs": [
+        0.8077,
+        0.7758,
+        0.8286,
+        0.8875,
+        0.9615,
+        0.7949,
+        0.7818,
+        0.8286,
+        0.9125,
+        0.9615
+      ],
+      "q_per_graph": 66.62286655011656,
+      "n_obs": 10
+    },
+    {
+      "dataset": "PROTEINS",
+      "defense": "none",
+      "variant": "zo_free_x2",
+      "feat_mode": "zo_free",
+      "extra_cfg": {
+        "feat_scale": "auto_x2"
+      },
+      "projection_off": false,
+      "asr_mean": 0.6736466033966034,
+      "asr_std": 0.02817751684469632,
+      "asr_obs": [
+        0.6731,
+        0.6485,
+        0.6629,
+        0.6562,
+        0.7244,
+        0.6731,
+        0.6485,
+        0.6629,
+        0.6562,
+        0.7308
+      ],
+      "q_per_graph": 103.18422086247085,
+      "n_obs": 10
+    },
+    {
+      "dataset": "PROTEINS",
+      "defense": "mahalanobis",
+      "variant": "sgdi",
+      "feat_mode": "sgdi",
+      "extra_cfg": {},
+      "projection_off": false,
+      "asr_mean": 0.668385198135198,
+      "asr_std": 0.04640873528050936,
+      "asr_obs": [
+        0.6731,
+        0.6424,
+        0.6057,
+        0.6562,
+        0.75,
+        0.6731,
+        0.6364,
+        0.6343,
+        0.6562,
+        0.7564
+      ],
+      "q_per_graph": 106.85085547785548,
+      "n_obs": 10
+    },
+    {
+      "dataset": "PROTEINS",
+      "defense": "mahalanobis",
+      "variant": "sgdi_noproj",
+      "feat_mode": "sgdi",
+      "extra_cfg": {},
+      "projection_off": true,
+      "asr_mean": 0.6315810439560441,
+      "asr_std": 0.030703433846655248,
+      "asr_obs": [
+        0.6538,
+        0.6061,
+        0.5886,
+        0.6312,
+        0.6859,
+        0.641,
+        0.5939,
+        0.6171,
+        0.625,
+        0.6731
+      ],
+      "q_per_graph": 118.50453234265733,
+      "n_obs": 10
+    },
+    {
+      "dataset": "PROTEINS",
+      "defense": "mahalanobis",
+      "variant": "sgdi_noproj_noprior",
+      "feat_mode": "sgdi",
+      "extra_cfg": {
+        "sgdi_eta": 0.0
+      },
+      "projection_off": true,
+      "asr_mean": 0.644673618048618,
+      "asr_std": 0.024535423786369387,
+      "asr_obs": [
+        0.6603,
+        0.6182,
+        0.64,
+        0.6312,
+        0.6923,
+        0.6603,
+        0.6121,
+        0.6343,
+        0.625,
+        0.6731
+      ],
+      "q_per_graph": 115.80079574592074,
+      "n_obs": 10
+    },
+    {
+      "dataset": "PROTEINS",
+      "defense": "mahalanobis",
+      "variant": "sgdi_free_x2",
+      "feat_mode": "sgdi",
+      "extra_cfg": {
+        "sgdi_eta": 0.0,
+        "feat_scale": "auto_x2"
+      },
+      "projection_off": true,
+      "asr_mean": 0.0036020646020646016,
+      "asr_std": 0.006103551839424472,
+      "asr_obs": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0064,
+        0.0,
+        0.0182,
+        0.0114,
+        0.0,
+        0.0
+      ],
+      "q_per_graph": 286.7247808857809,
+      "n_obs": 10
+    },
+    {
+      "dataset": "PROTEINS",
+      "defense": "mahalanobis",
+      "variant": "zo_free",
+      "feat_mode": "zo_free",
+      "extra_cfg": {},
+      "projection_off": false,
+      "asr_mean": 0.0423053613053613,
+      "asr_std": 0.06937566575470158,
+      "asr_obs": [
+        0.0256,
+        0.0061,
+        0.1829,
+        0.0,
+        0.0,
+        0.0192,
+        0.0121,
+        0.1771,
+        0.0,
+        0.0
+      ],
+      "q_per_graph": 275.70522843822846,
+      "n_obs": 10
+    },
+    {
+      "dataset": "PROTEINS",
+      "defense": "mahalanobis",
+      "variant": "zo_free_x2",
+      "feat_mode": "zo_free",
+      "extra_cfg": {
+        "feat_scale": "auto_x2"
+      },
+      "projection_off": false,
+      "asr_mean": 0.0,
+      "asr_std": 0.0,
+      "asr_obs": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "q_per_graph": 287.0,
+      "n_obs": 10
+    }
+  ]
+}

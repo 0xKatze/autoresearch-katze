@@ -1,0 +1,56 @@
+{
+  "script": "bench_zofree.py",
+  "timestamp": "2026-09-29T19:24:49",
+  "config": {
+    "feat_mode": "zo_free",
+    "feat_scale": "auto_x2",
+    "skip_greedy": true,
+    "frac_anchors": [
+      1.0
+    ]
+  },
+  "rows": [
+    {
+      "fold": 0,
+      "asr": 0.6730769230769231,
+      "n": 156,
+      "queries": 43731,
+      "q_per_graph": 280.3269230769231,
+      "wall_s": 17.7
+    },
+    {
+      "fold": 1,
+      "asr": 0.6484848484848484,
+      "n": 165,
+      "queries": 49634,
+      "q_per_graph": 300.8121212121212,
+      "wall_s": 20.7
+    },
+    {
+      "fold": 2,
+      "asr": 0.6628571428571428,
+      "n": 175,
+      "queries": 50547,
+      "q_per_graph": 288.84,
+      "wall_s": 22.1
+    },
+    {
+      "fold": 3,
+      "asr": 0.65625,
+      "n": 160,
+      "queries": 47095,
+      "q_per_graph": 294.34375,
+      "wall_s": 20.0
+    },
+    {
+      "fold": 4,
+      "asr": 0.7243589743589743,
+      "n": 156,
+      "queries": 37067,
+      "q_per_graph": 237.60897435897436,
+      "wall_s": 14.6
+    }
+  ],
+  "mean_asr": 0.6730055777555778,
+  "mean_q_per_graph": 280.3863537296037
+}

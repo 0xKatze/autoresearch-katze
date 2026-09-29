@@ -1,0 +1,54 @@
+{
+  "script": "F5 discriminator: sgdi_noproj_noprior under mahalanobis, PROTEINS, Langevin noise on vs off",
+  "attack_cfg": {
+    "node_budget": 1,
+    "skip_greedy": true,
+    "zo_epochs": 20,
+    "zo_restarts": 2
+  },
+  "seeds": [
+    0,
+    1
+  ],
+  "cells": {
+    "noise_off": {
+      "asr_mean": 0.6297275641025641,
+      "asr_std": 0.030440045342416434,
+      "asr_obs": [
+        0.6474,
+        0.6061,
+        0.5886,
+        0.6312,
+        0.6859,
+        0.6346,
+        0.5939,
+        0.6114,
+        0.625,
+        0.6731
+      ],
+      "extra_cfg": {
+        "sgdi_eta": 0.0,
+        "sgdi_temp": 0.0
+      }
+    },
+    "noise_on": {
+      "asr_mean": 0.644673618048618,
+      "asr_std": 0.024535423786369387,
+      "asr_obs": [
+        0.6603,
+        0.6182,
+        0.64,
+        0.6312,
+        0.6923,
+        0.6603,
+        0.6121,
+        0.6343,
+        0.625,
+        0.6731
+      ],
+      "extra_cfg": {
+        "sgdi_eta": 0.0
+      }
+    }
+  }
+}

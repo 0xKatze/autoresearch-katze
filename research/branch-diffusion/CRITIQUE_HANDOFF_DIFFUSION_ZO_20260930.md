@@ -192,14 +192,15 @@ GPU/訓練指令一律交給使用者手動啟動(專案慣例 + classifier 政�
 | secgnn | dgl 1.1.1 / torch 2.0 | CPU | **73.57%** |
 | graph_adversarial | dgl 2.4 / torch 2.12 | GPU | **68.45%** |
 
-→ **~5pp stack-sensitivity**(dgl/torch 版本 + device 的 RNG 差異;GZOO 的 success 認定靠隨機 σ-perturbation 候選,RNG stream 跨 stack 不同 → 成功判定飄)。疊在對論文 95.69% 的 ~22–27pp gap 之上。**含意**:(a) 整個驗證 program 要**固定單一 stack**(faithful 選 secgnn/CPU,scale 選 graph_adversarial/GPU;兩者不可混);(b) 前置判準等**成對比較**必須同 env 同 seed,ASR 絕對值飄不影響成對結論;(c) 再次坐實 §2:success-inflation 讓數字對 RNG 敏感 → V0-strict 更必要。
+→ **~5pp stack-sensitivity**(dgl 1.1↔2.4 / torch 2.0↔2.12 + device 的**優化過程**數值/RNG drift。**注意**:後來 V0-strict 證明候選-verdict 收斂後淨效 ≈0,所以這 5pp **不是** success 偵測器的 RNG,而是優化本身的 drift)。疊在對論文 95.69% 的 ~22–27pp gap 之上。**含意**:(a) 整個驗證 program 要**固定單一 stack**(faithful 選 secgnn/CPU,scale 選 graph_adversarial/GPU;兩者不可混);(b) 前置判準等**成對比較**必須同 env 同 seed,ASR 絕對值飄不影響成對結論;(c) 再次坐實 §2:success-inflation 讓數字對 RNG 敏感 → V0-strict 更必要。
 
 ### 前置判準 + V0-strict 部分結果(2026-09-30,secgnn/CPU,seed 1027,Cora+SGC)
 - **Trivial baseline(random_real,on-manifold 真實節點特徵,無優化)= 5.86% ASR**(deterministic:26 個 evaluate_performance 呼叫 × 3 epochs 全 5.86%,收斂確定值)。→ 節點分類下「1 注入節點 + 1 邊 + 中性真實特徵」幾乎不 flip(target 本來就有很多真鄰居,單一注入被稀釋)。
 - **success-inflation 是 epoch-0 transient,非收斂差(已修正先前過度宣稱)**:epoch 0 stock ~58% vs strict 6.98%(差 ~51pp)——但那是 generator **未訓練**時的假象(候選 σ-擾動偶有 flip,真實注入圖幾乎不 flip)。**generator 訓練後 strict 快速追上**:epoch 1 strict = **56.61%**。→ 真正的膨脹量 = stock final(73.57%)− strict final(待跑完),**遠小於 51pp**。§2 claim 6 仍成立(候選 verdict ≠ 真實 verdict),但收斂後幅度小得多;不可宣稱「73.57% 主要是膨脹」。final strict ASR pending(epoch 1/5,climbing)。
 - **前置判準結果(RESOLVED,決定性)**:strict-optimized **final = 74.44%**(5 epochs)。三數對比:trivial 5.86% / stock 73.57% / strict 74.44%。
-  - **(1) 收斂後 success-inflation ≈ 0**:strict 74.44% ≈ stock 73.57%(甚至 +0.87pp,因 strict 下 target 不被候選-flip 移除 → 多優化幾步)。epoch-0 的 51pp gap 收斂後**全部消失**。→ §2 claim 6 是真的 code smell 但**經驗上不膨脹最終數字**;**V0-strict 的價值 = 證明論文 ASR 沒被膨脹**(不是抓到膨脹)。
-  - **(2) 前置判準 PASS(門檻 10pp)**:**74.44 − 5.86 = 68.58pp ≫ 10pp**。→ 節點分類下 **feature 優化極度決定性**(與 graph-cls N23 相反,那裡 topology 主導、feature-diffusion 加 0)。→ **節點分類逃生口成立**:diffusion 先驗線在 node-cls **不 moot**,feature prior 有真實空間發揮。這正面回答 §1-D 的舉證責任 + advisor item 1。
+  - **(1) 收斂後 success-inflation ≈ 0**:strict 74.44% ≈ stock 73.57%(甚至 +0.87pp,因 strict 下 target 不被候選-flip 移除 → 多優化幾步)。epoch-0 的 51pp gap 收斂後**全部消失**。→ §2 claim 6 是真的 code smell 但**經驗上不膨脹最終數字**;**V0-strict 的價值 = 證明「我這一跑(README SGC config,單 seed/單資料集/單 victim)沒被膨脹」**——**不等於**論文 95.69% 沒被膨脹(那個 headline 我仍未重現,停在 73–74%)。
+  - **(2) 前置判準 vs random_real PASS,但需 class_shift 補強**:**74.44 − 5.86 = 68.58pp**。但 random_real 是**class-中性**特徵(=近 topology-only floor),所以這只證明「learned feature > 任意特徵」。真正要贏的競爭者是**便宜但對抗**的 baseline:**class_shift**(複製 target 第二名 class 的真實節點,1 次 clean query,零 ZO)。若 class_shift ≈ 60% → 68.58pp 是打稻草人,結論改成「feature *方向* 決定性、任何合理挑法都拿到大部分」。若 class_shift ≈ 15% → 結論成立且更強。**[執行中]**
+  - **(3) 修正 stack-sensitivity 因果**:68→74% 的 CPU/GPU 5pp gap **不是**候選-verdict 的 RNG(該機制收斂後淨效 ≈0),而是 **dgl 1.1↔2.4 / torch 2.0↔2.12 在優化過程的數值/RNG drift**。
 
 ### GPU 解鎖(advisor item 4,成功)
 原判「sm_120 → 只能 CPU」**已推翻**。GZOO 卡在 cu128 env 的唯一原因是 module-level `import torch_sparse`(需 torch_scatter),而用它的 `adj_to_tensor`/`tensor_to_adj` 是**死碼(全 repo 無呼叫)**。修法(都在 `GZOO-Working`,canonical 不動):

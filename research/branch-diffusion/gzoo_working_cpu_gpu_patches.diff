@@ -1,17 +1,17 @@
 # GZOO-Working patches vs canonical GZOO-Official (2026-09-30)
 # (a) CPU fallback, (b) cu128/sm_120 GPU via lazy pyg imports,
-# (c) --gzoo_strict_success (V0-strict), (d) --gzoo_feat_override (trivial baseline).
+# (c) --gzoo_strict_success (V0-strict), (d) --gzoo_feat_override {random_real,neighbor_copy,class_shift} (trivial baselines).
 # Vendored working copy /workspace/reference/GZOO-Working — NOT added to the repo.
 
 --- GZOO-Official/main.py	2026-04-02 08:59:39.917747791 +0000
-+++ GZOO-Working/main.py	2026-09-30 05:35:18.972757088 +0000
++++ GZOO-Working/main.py	2026-09-30 07:28:51.249692370 +0000
 @@ -60,6 +60,9 @@
      parser.add_argument('--gzoo_gen_feat_mid_dim', type=int, default=4, help='Middle Hidden dim of generator')
      parser.add_argument('--gzoo_gen_lr', type=float, default=1e-3, help='learning rate')
      parser.add_argument('--gzoo_batch_size', type=int, default=0, help='batch-size for sub-dataset optimization')
 +    # reproduction-audit flags (GZOO-Working only)
 +    parser.add_argument('--gzoo_strict_success', action='store_true', help='V0-strict: count real injected-graph verdict, not candidate verdict')
-+    parser.add_argument('--gzoo_feat_override', type=str, default='none', choices=['none', 'random_real', 'neighbor_copy'], help='trivial baseline: inject a fixed on-manifold real-node feature, no optimization')
++    parser.add_argument('--gzoo_feat_override', type=str, default='none', choices=['none', 'random_real', 'neighbor_copy', 'class_shift'], help='trivial baseline: inject a fixed on-manifold real-node feature, no optimization')
      parser.add_argument('--gzoo_attack_epochs', type=int, default=5, help='attack epochs')
      parser.add_argument('--gzoo_alpha', type=float, default=1.0, help='balance factor')
      parser.add_argument('--gzoo_tau', type=float, default=1e-2, help='gradient scale factor')
@@ -61,21 +61,46 @@
  
  
 --- GZOO-Official/attack/gzoo.py	2026-04-02 08:59:39.913915610 +0000
-+++ GZOO-Working/attack/gzoo.py	2026-09-30 05:34:57.353875583 +0000
-@@ -42,6 +42,22 @@
++++ GZOO-Working/attack/gzoo.py	2026-09-30 07:28:45.685460493 +0000
+@@ -42,6 +42,47 @@
      return cur_graph
  
  
-+def trivial_node_attr(g, target_idx, node_budget, mode, do_normalize):
++_CLEAN_LOGITS = {}
++
++
++def _clean_logits(model, g):
++    """Clean-graph logits for all nodes (cached once per graph object; 1 forward total)."""
++    key = id(g)
++    if key not in _CLEAN_LOGITS:
++        with torch.no_grad():
++            _CLEAN_LOGITS[key] = model(g, g.ndata['feat'], no_grad=True).detach()
++    return _CLEAN_LOGITS[key]
++
++
++def trivial_node_attr(g, target_idx, node_budget, mode, do_normalize, model=None):
 +    """Deterministic on-manifold injected feature for the trivial baseline (no optimization).
 +    'neighbor_copy' = the target's own feature row (reinforces class; near-floor).
-+    'random_real'   = a fixed, class-uncontrolled real node's feature (target_idx + N//2), the
-+                      fairer neutral on-manifold baseline. Deterministic in target_idx so the
-+                      per-step loop and evaluate_performance produce the identical injection.
++    'random_real'   = a fixed, class-uncontrolled real node's feature (target_idx + N//2): the
++                      class-NEUTRAL on-manifold baseline (~= topology-only floor).
++    'class_shift'   = a real node of the target's SECOND-ranked clean class (cheap but ADVERSARIAL,
++                      1 clean query, zero ZO). This is the competitor ZO/diffusion must beat.
++    Deterministic in target_idx so the per-step loop and evaluate_performance produce the identical
++    injection.
 +    """
 +    n = g.num_nodes()
 +    tgt = int(target_idx.item()) if torch.is_tensor(target_idx) else int(target_idx)
-+    src = tgt if mode == 'neighbor_copy' else (tgt + n // 2) % n
++    if mode == 'neighbor_copy':
++        src = tgt
++    elif mode == 'random_real':
++        src = (tgt + n // 2) % n
++    elif mode == 'class_shift':
++        logits = _clean_logits(model, g)
++        second = int(torch.argsort(logits[tgt], descending=True)[1].item())
++        cand = (g.ndata['label'] == second).nonzero(as_tuple=True)[0]
++        src = int(cand[0].item()) if cand.numel() > 0 else (tgt + n // 2) % n
++    else:
++        raise ValueError('unknown feat_override {}'.format(mode))
 +    attr = g.ndata['feat'][src].reshape(1, -1).repeat(node_budget, 1).clone().float()
 +    if do_normalize:
 +        attr = F.normalize(attr, dim=1)
@@ -85,7 +110,7 @@
  def sample_gumbel(shape, eps=1e-20, device='cuda:0'):
      U = torch.rand(shape).to(device)
      return -torch.log(-torch.log(U + eps) + eps)
-@@ -403,7 +419,8 @@
+@@ -403,7 +444,8 @@
      return sub_graph, node_idx, mapping_fn
  
  
@@ -95,18 +120,18 @@
      model.eval()
      generator.eval()
  
-@@ -423,6 +440,10 @@
+@@ -423,6 +465,10 @@
          node_attr, attr_sample_weights, node_edges, edge_sample_weights, cur_graph = generator(
              sub_graph, sub_graph.ndata['feat'], graph, mapping_fn, node_idx
          )
 +        if feat_override != 'none':
 +            # trivial baseline re-query: reuse the generator's node_edges, override features only.
-+            override_attr = trivial_node_attr(g, target_idx, node_budget, feat_override, do_normalize=normalize_override)
++            override_attr = trivial_node_attr(g, target_idx, node_budget, feat_override, do_normalize=normalize_override, model=model)
 +            cur_graph = construct_graph(graph, override_attr, node_edges)
          _, success = infer_cw_loss(model, cur_graph, target_idx, kappa, target_label=test_labels, mode='untargeted')
  
          # if success == 1:
-@@ -511,6 +532,13 @@
+@@ -511,6 +557,13 @@
          self.epochs = kwargs.get('attack_epochs')
          self.tau = kwargs.get('tau')
          self.gen_feat_mid_dim = kwargs.get('gen_feat_mid_dim')
@@ -120,7 +145,7 @@
  
          # feature dim
          self.mu = torch.mean(self.dataset.graph.ndata['feat'], dim=None, keepdim=False)
-@@ -581,14 +609,26 @@
+@@ -581,14 +634,26 @@
                      ))
  
                  # -------------- Black-box Optimizing --------------
@@ -129,7 +154,7 @@
 +                    # Trivial baseline: inject a fixed on-manifold real-node feature, NO optimization.
 +                    override_attr = trivial_node_attr(
 +                        g, target_idx, self.node_budget, self.feat_override,
-+                        do_normalize=(self.normalized and self.discrete_feat)
++                        do_normalize=(self.normalized and self.discrete_feat), model=model
 +                    )
 +                    cur_graph = construct_graph(graph, override_attr, node_edges)
                      loss, success = infer_cw_loss(model, cur_graph, target_idx, self.kappa, target_label=test_labels, mode='untargeted')
@@ -150,7 +175,7 @@
  
                      feature_loss = torch.tensor(0., device=self.device)
                      if self.discrete_feat:
-@@ -613,13 +653,17 @@
+@@ -613,13 +678,17 @@
                              sample_idx, target_idx.item(), success, loss, feature_loss.item()
                          ))
  

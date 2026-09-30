@@ -191,6 +191,11 @@ GPU/訓練指令一律交給使用者手動啟動(專案慣例 + classifier 政�
 - `models/utils.py`:把 pyg 相依的 6 類(ChebNet/PCNet/SGFormer/GTrans/MAGNet/ProGNN)從 top-level 改成 `init_gnn_model` 內 lazy import;核心 victim(gcn/sgc/gat/appnp/rgat/gcnguard/rgcn)是 pyg-free。
 → GZOO 現可在 `graph_adversarial`(torch 2.12 nightly / cu128 / sm_120)**用 GPU 跑**。E0-gpu 執行中(`--device 0`,env=graph_adversarial)。注意:Cora 太小(2708 nodes),GPU 對 SGC 的加速可能有限(kernel launch 開銷);GPU 的價值在**較重的 victim/資料集**(GCN、Coauthor-CS、ogbn-arxiv)。
 
+### 未解 / 下一步
+- **[OPEN] 73.57% vs 95.69% 的 gap 歸因未定**:論文 Cora 逐-victim 表在 PDF layout 下抽不乾淨;95.69% 是 6-victim 的 headline/best,SGC 那格的確切值待查(用 `scripts/vault_rag` 或人工讀 PDF 表)。在確認前,**73.57% 當成 SGC stock 基線**,不宣稱「reproduction 失敗」也不宣稱「成功」。
+- **[目標相關] GZOO 論文本身含 graph classification**:文中「54.26% on PROTEINS with GCN」——使用者目標的「圖分類」半邊,GZOO 原文就有做,且本 repo branch-diffusion 全線是 graph classification。→ 「圖分類」的穩健性驗證應**接到本 repo 既有 SGDI/N24 結果**(見 §1),不是從 GZOO node-cls 重跑;「節點分類」半邊才是 handoff 這條新線。
+- **next chunks(依序,都需實作)**:(a) V0-strict + 全 query 計數 instrumentation → 量 SGC 膨脹幅度;(b) **節點分類前置判準(§7 Step 3,最決定性)**:V_triv(trivial μ/鄰居複製注入)vs GZOO feature-optimized 的 ASR 差 → 差小則 diffusion 重演 N23,整條線 moot;(c) 才輪到 diffusion 先驗本身。
+
 ### 下一步(依賴,見 §10 advisor 決策)
 - 待定:跑 Cora+GCN 直接檢驗 95.69%,還是先上 V0-strict 量 SGC 的膨脹幅度。
 - CPU-only(sm_120 無解)使整個 E0–E7 program 很慢 → 需重新規劃規模(少 config / 每 config 抽樣節點)。

@@ -194,6 +194,11 @@ GPU/訓練指令一律交給使用者手動啟動(專案慣例 + classifier 政�
 
 → **~5pp stack-sensitivity**(dgl/torch 版本 + device 的 RNG 差異;GZOO 的 success 認定靠隨機 σ-perturbation 候選,RNG stream 跨 stack 不同 → 成功判定飄)。疊在對論文 95.69% 的 ~22–27pp gap 之上。**含意**:(a) 整個驗證 program 要**固定單一 stack**(faithful 選 secgnn/CPU,scale 選 graph_adversarial/GPU;兩者不可混);(b) 前置判準等**成對比較**必須同 env 同 seed,ASR 絕對值飄不影響成對結論;(c) 再次坐實 §2:success-inflation 讓數字對 RNG 敏感 → V0-strict 更必要。
 
+### 前置判準 + V0-strict 部分結果(2026-09-30,secgnn/CPU,seed 1027,Cora+SGC)
+- **Trivial baseline(random_real,on-manifold 真實節點特徵,無優化)= 5.86% ASR**(deterministic:26 個 evaluate_performance 呼叫 × 3 epochs 全 5.86%,收斂確定值)。→ 節點分類下「1 注入節點 + 1 邊 + 中性真實特徵」幾乎不 flip(target 本來就有很多真鄰居,單一注入被稀釋)。
+- **success-inflation 實測(震撼)**:**同一 epoch 0**,stock 認定 ~58%,**strict(只認真實注入圖 flip)= 6.98%**。差 ~51pp。→ §2 claim 6 大幅坐實:stock 73.57% 主要是「200 個 σ-擾動候選有任一 flip」的膨脹,真實注入圖在 epoch 0 只 flip ~7%。**strict 會隨 epoch 爬升**(strict 下很少 target 被移除 → generator 持續優化),final strict ASR 待跑完(CPU 可能 3–4h,因每 epoch 都攻擊近全部 target)。
+- **[PENDING] 前置判準門檻**:strict-optimized(final) − trivial(5.86%)。若 <10pp → diffusion 線 moot。epoch-0 strict(6.98%)才比 trivial 高 1.1pp,但要等 final。
+
 ### GPU 解鎖(advisor item 4,成功)
 原判「sm_120 → 只能 CPU」**已推翻**。GZOO 卡在 cu128 env 的唯一原因是 module-level `import torch_sparse`(需 torch_scatter),而用它的 `adj_to_tensor`/`tensor_to_adj` 是**死碼(全 repo 無呼叫)**。修法(都在 `GZOO-Working`,canonical 不動):
 - `attack/utils.py`:torch_sparse + `scipy.sparse.csr` import 包 try/except(defensive)。

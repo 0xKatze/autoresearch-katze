@@ -183,7 +183,16 @@ GPU/訓練指令一律交給使用者手動啟動(專案慣例 + classifier 政�
 1. **73.57% 低於論文 95.69% ~22pp,且這已是膨脹版**(含 §2 claim 6 success-inflation)。**修正措辭**(advisor):不可斷言「V0-strict 只會更低」——§2 說 `:585` query 真實輸出但 `:587` **覆寫丟棄** verdict(不是 OR),所以「真實注入成功但候選沒成功」的目標**不被計**;σ=1e-3 下膨脹方向大概率佔優,但**只能實測膨脹幅度,不保證方向**。
 2. **論文 95.69% 的歸屬(直接讀 `GZOO-Yu2025.pdf`)**:Effectiveness 表用 **6 個 victim(GCN/SGC/APPNP/ChebNet/SGFormer/PC-Net)**;文中「on the Cora dataset, GZOO achieves an ASR of 95.69%, well above the 66.01% of next-best SPEIT」是跨-victim 的代表/最佳值,**非單一 SGC cell**。**ASR 定義**=「proportion of target nodes incorrectly classified after attack」= 我的 success_rate 定義,denominator 可比。→ 73.57%(SGC)是真實 reproduction gap,不是量法差異。README:35「Victim=GCN」標題 vs :37 指令 `sgc` 是 README 自身不一致。
 3. **query 數未取得**:GZOO 不印 total_queries(只有 wandb,已停用);需 V1 instrumentation 才有 query-ASR 曲線。
-4. victim Cora SGC test acc 80.2%(GPU/CPU 一致,deterministic)。
+4. victim Cora SGC test acc 80.2%(兩 env 一致)。**但 ASR 非 deterministic**——見下方 stack-sensitivity;不可稱 E0 數字 deterministic。
+
+### E0 stack-sensitivity(重要 reproducibility 發現)
+同 seed(1027)、同參數、同 victim acc(80.20%),兩個 env 給**不同 ASR**:
+| env | stack | device | Final ASR |
+|---|---|---|---|
+| secgnn | dgl 1.1.1 / torch 2.0 | CPU | **73.57%** |
+| graph_adversarial | dgl 2.4 / torch 2.12 | GPU | **68.45%** |
+
+→ **~5pp stack-sensitivity**(dgl/torch 版本 + device 的 RNG 差異;GZOO 的 success 認定靠隨機 σ-perturbation 候選,RNG stream 跨 stack 不同 → 成功判定飄)。疊在對論文 95.69% 的 ~22–27pp gap 之上。**含意**:(a) 整個驗證 program 要**固定單一 stack**(faithful 選 secgnn/CPU,scale 選 graph_adversarial/GPU;兩者不可混);(b) 前置判準等**成對比較**必須同 env 同 seed,ASR 絕對值飄不影響成對結論;(c) 再次坐實 §2:success-inflation 讓數字對 RNG 敏感 → V0-strict 更必要。
 
 ### GPU 解鎖(advisor item 4,成功)
 原判「sm_120 → 只能 CPU」**已推翻**。GZOO 卡在 cu128 env 的唯一原因是 module-level `import torch_sparse`(需 torch_scatter),而用它的 `adj_to_tensor`/`tensor_to_adj` 是**死碼(全 repo 無呼叫)**。修法(都在 `GZOO-Working`,canonical 不動):
@@ -194,7 +203,11 @@ GPU/訓練指令一律交給使用者手動啟動(專案慣例 + classifier 政�
 ### 未解 / 下一步
 - **[OPEN] 73.57% vs 95.69% 的 gap 歸因未定**:論文 Cora 逐-victim 表在 PDF layout 下抽不乾淨;95.69% 是 6-victim 的 headline/best,SGC 那格的確切值待查(用 `scripts/vault_rag` 或人工讀 PDF 表)。在確認前,**73.57% 當成 SGC stock 基線**,不宣稱「reproduction 失敗」也不宣稱「成功」。
 - **[目標相關] GZOO 論文本身含 graph classification**:文中「54.26% on PROTEINS with GCN」——使用者目標的「圖分類」半邊,GZOO 原文就有做,且本 repo branch-diffusion 全線是 graph classification。→ 「圖分類」的穩健性驗證應**接到本 repo 既有 SGDI/N24 結果**(見 §1),不是從 GZOO node-cls 重跑;「節點分類」半邊才是 handoff 這條新線。
-- **next chunks(依序,都需實作)**:(a) V0-strict + 全 query 計數 instrumentation → 量 SGC 膨脹幅度;(b) **節點分類前置判準(§7 Step 3,最決定性)**:V_triv(trivial μ/鄰居複製注入)vs GZOO feature-optimized 的 ASR 差 → 差小則 diffusion 重演 N23,整條線 moot;(c) 才輪到 diffusion 先驗本身。
+- **next chunks(依序,advisor 定案)**:
+  1. **V0-strict 先做**(stack-sensitivity 證明 success 認定被 RNG 汙染 → 前置判準前必須先修)。2-line flagged 改動:`--gzoo_strict_success` 讓 `:585` 對真實 `cur_graph` 的 `success` 不被 `:587` estimate_gradient 的候選 verdict 覆寫,直接寫入 `:617` attack_results;estimate_gradient 的內部 success 只留作訓練訊號。**不動 `evaluate_performance`**(generator 每步更新,per-step `:585` 才是該 target「最終圖」的正確定義)。
+  2. **節點分類前置判準**(最決定性):flag `--gzoo_feat_override {none,neighbor_copy}`,在 GZOO loop 內跳過 estimate_gradient/optimizer.step、把 node_attr 設成**複製目標(或隨機真實節點)的特徵列**(套同樣 `F.normalize`),edge 用 GZOO 同款 construct_graph。**不可用 mean 向量**(binary bag-of-words 的 mean 是 dense off-manifold 點,會讓 V_triv 不公平地弱、白送 H1)。同 env(secgnn/CPU)同 seed 成對比。
+  3. **閘門門檻(先寫死,事後不准改)**:成對同 target 下,**strict-optimized ASR − strict-neighbor_copy ASR < ~10pp** → feature 優化貢獻微小 → diffusion 先驗線對 node-cls moot(重演 N23)。≥10pp 才續做 diffusion。
+- **注意**:graph_adversarial(GPU)的 ASR 與 secgnn 差 ~5pp,**兩 env 數字不可互比**;報 GPU 數字時必註明。
 
 ### 下一步(依賴,見 §10 advisor 決策)
 - 待定:跑 Cora+GCN 直接檢驗 95.69%,還是先上 V0-strict 量 SGC 的膨脹幅度。

@@ -1,10 +1,21 @@
-# GZOO-Working patches vs canonical GZOO-Official (E0 reproduction; 2026-09-30)
-# Purpose: (a) CPU fallback, (b) unlock cu128/sm_120 GPU by lazy-loading pyg-only code.
-# Vendored working copy at /workspace/reference/GZOO-Working — NOT added to the repo.
+# GZOO-Working patches vs canonical GZOO-Official (2026-09-30)
+# (a) CPU fallback, (b) cu128/sm_120 GPU via lazy pyg imports,
+# (c) --gzoo_strict_success (V0-strict), (d) --gzoo_feat_override (trivial baseline).
+# Vendored working copy /workspace/reference/GZOO-Working — NOT added to the repo.
 
 --- GZOO-Official/main.py	2026-04-02 08:59:39.917747791 +0000
-+++ GZOO-Working/main.py	2026-09-30 03:14:59.855091604 +0000
-@@ -73,7 +73,7 @@
++++ GZOO-Working/main.py	2026-09-30 05:35:18.972757088 +0000
+@@ -60,6 +60,9 @@
+     parser.add_argument('--gzoo_gen_feat_mid_dim', type=int, default=4, help='Middle Hidden dim of generator')
+     parser.add_argument('--gzoo_gen_lr', type=float, default=1e-3, help='learning rate')
+     parser.add_argument('--gzoo_batch_size', type=int, default=0, help='batch-size for sub-dataset optimization')
++    # reproduction-audit flags (GZOO-Working only)
++    parser.add_argument('--gzoo_strict_success', action='store_true', help='V0-strict: count real injected-graph verdict, not candidate verdict')
++    parser.add_argument('--gzoo_feat_override', type=str, default='none', choices=['none', 'random_real', 'neighbor_copy'], help='trivial baseline: inject a fixed on-manifold real-node feature, no optimization')
+     parser.add_argument('--gzoo_attack_epochs', type=int, default=5, help='attack epochs')
+     parser.add_argument('--gzoo_alpha', type=float, default=1.0, help='balance factor')
+     parser.add_argument('--gzoo_tau', type=float, default=1e-2, help='gradient scale factor')
+@@ -73,7 +76,7 @@
  
      # froze random
      seed_experiment(seed=args.seed)
@@ -13,7 +24,7 @@
  
      dataset_name = args.dataset
      wandb_ins = wandb.init(
-@@ -143,7 +143,7 @@
+@@ -143,10 +146,11 @@
          attacker = GZOO(
              dataset=dataset, khop_edge=args.gzoo_khop_edge, node_budget=args.node_budget, patience=args.gzoo_patience,
              edge_budget=args.edge_budget, kappa=args.gzoo_kappa, sigma=args.gzoo_sigma, eval_num=args.gzoo_eval_num,
@@ -21,7 +32,12 @@
 +            victim_model_name=args.victim_model, device=device, normalized=normalized, run_mode=args.gzoo_run_mode,
              feature_budget_factor=args.feature_budget_factor, gen_feat_dim=args.gzoo_gen_feat_dim, gen_hid_dim=args.gzoo_gen_hid_dim,
              gen_lr=args.gzoo_gen_lr, batch_size=args.gzoo_batch_size, attack_epochs=args.gzoo_attack_epochs, alpha=args.gzoo_alpha, tau=args.gzoo_tau,
-             gen_feat_mid_dim=args.gzoo_gen_feat_mid_dim
+-            gen_feat_mid_dim=args.gzoo_gen_feat_mid_dim
++            gen_feat_mid_dim=args.gzoo_gen_feat_mid_dim,
++            strict_success=args.gzoo_strict_success, feat_override=args.gzoo_feat_override
+         )
+     else:
+         raise NotImplementedError('Attacker {} is not implemented'.format(args.attacker))
 --- GZOO-Official/attack/utils.py	2026-04-02 08:59:39.913915610 +0000
 +++ GZOO-Working/attack/utils.py	2026-09-30 04:55:43.031730782 +0000
 @@ -2,9 +2,16 @@
@@ -44,6 +60,116 @@
  from sklearn.metrics import roc_auc_score
  
  
+--- GZOO-Official/attack/gzoo.py	2026-04-02 08:59:39.913915610 +0000
++++ GZOO-Working/attack/gzoo.py	2026-09-30 05:34:57.353875583 +0000
+@@ -42,6 +42,22 @@
+     return cur_graph
+ 
+ 
++def trivial_node_attr(g, target_idx, node_budget, mode, do_normalize):
++    """Deterministic on-manifold injected feature for the trivial baseline (no optimization).
++    'neighbor_copy' = the target's own feature row (reinforces class; near-floor).
++    'random_real'   = a fixed, class-uncontrolled real node's feature (target_idx + N//2), the
++                      fairer neutral on-manifold baseline. Deterministic in target_idx so the
++                      per-step loop and evaluate_performance produce the identical injection.
++    """
++    n = g.num_nodes()
++    tgt = int(target_idx.item()) if torch.is_tensor(target_idx) else int(target_idx)
++    src = tgt if mode == 'neighbor_copy' else (tgt + n // 2) % n
++    attr = g.ndata['feat'][src].reshape(1, -1).repeat(node_budget, 1).clone().float()
++    if do_normalize:
++        attr = F.normalize(attr, dim=1)
++    return attr.to(g.ndata['feat'].device)
++
++
+ def sample_gumbel(shape, eps=1e-20, device='cuda:0'):
+     U = torch.rand(shape).to(device)
+     return -torch.log(-torch.log(U + eps) + eps)
+@@ -403,7 +419,8 @@
+     return sub_graph, node_idx, mapping_fn
+ 
+ 
+-def evaluate_performance(model, generator, g, target_indexes, khop_edge, attack_results, kappa, test_labels, device, num_succeed):
++def evaluate_performance(model, generator, g, target_indexes, khop_edge, attack_results, kappa, test_labels, device, num_succeed,
++                         feat_override='none', normalize_override=False, node_budget=1):
+     model.eval()
+     generator.eval()
+ 
+@@ -423,6 +440,10 @@
+         node_attr, attr_sample_weights, node_edges, edge_sample_weights, cur_graph = generator(
+             sub_graph, sub_graph.ndata['feat'], graph, mapping_fn, node_idx
+         )
++        if feat_override != 'none':
++            # trivial baseline re-query: reuse the generator's node_edges, override features only.
++            override_attr = trivial_node_attr(g, target_idx, node_budget, feat_override, do_normalize=normalize_override)
++            cur_graph = construct_graph(graph, override_attr, node_edges)
+         _, success = infer_cw_loss(model, cur_graph, target_idx, kappa, target_label=test_labels, mode='untargeted')
+ 
+         # if success == 1:
+@@ -511,6 +532,13 @@
+         self.epochs = kwargs.get('attack_epochs')
+         self.tau = kwargs.get('tau')
+         self.gen_feat_mid_dim = kwargs.get('gen_feat_mid_dim')
++        # --- reproduction-audit flags (GZOO-Working; absent in canonical GZOO-Official) ---
++        # strict_success: trust the real injected-graph verdict (:585) instead of the
++        #   candidate-based verdict from estimate_gradient (fixes the success-inflation of §2 claim 6).
++        # feat_override: trivial baseline -- inject a fixed on-manifold real-node feature with NO
++        #   optimization ('random_real'/'neighbor_copy'), to measure what ZO feature optimization adds.
++        self.strict_success = kwargs.get('strict_success', False)
++        self.feat_override = kwargs.get('feat_override', 'none')
+ 
+         # feature dim
+         self.mu = torch.mean(self.dataset.graph.ndata['feat'], dim=None, keepdim=False)
+@@ -581,14 +609,26 @@
+                     ))
+ 
+                 # -------------- Black-box Optimizing --------------
+-                if self.run_mode == 'black-box':
++                if self.run_mode == 'black-box' and self.feat_override != 'none':
++                    # Trivial baseline: inject a fixed on-manifold real-node feature, NO optimization.
++                    override_attr = trivial_node_attr(
++                        g, target_idx, self.node_budget, self.feat_override,
++                        do_normalize=(self.normalized and self.discrete_feat)
++                    )
++                    cur_graph = construct_graph(graph, override_attr, node_edges)
+                     loss, success = infer_cw_loss(model, cur_graph, target_idx, self.kappa, target_label=test_labels, mode='untargeted')
+-                    # `success` may be in gradient estimation
+-                    success, feat_grad, edge_grad = estimate_gradient(
++                    logger.info('Batch Inner Sample Idx = {}@Target Idx = {}@Success = {}@[trivial={}]'.format(
++                        sample_idx, target_idx.item(), success, self.feat_override))
++                elif self.run_mode == 'black-box':
++                    loss, real_success = infer_cw_loss(model, cur_graph, target_idx, self.kappa, target_label=test_labels, mode='untargeted')
++                    # candidate-based verdict = training signal (stock GZOO overwrites `success` with this)
++                    cand_success, feat_grad, edge_grad = estimate_gradient(
+                         model, self.generator, graph, cur_graph, node_attr, node_edges, edge_sample_weights,
+                         self.eval_num, self.sigma, mapping_fn, target_idx, node_idx, self.kappa,
+                         target_label=test_labels, mode='untargeted', discrete_feat=self.discrete_feat
+                     )
++                    # V0-strict: count the real injected-graph verdict, not the candidate one.
++                    success = real_success if self.strict_success else cand_success
+ 
+                     feature_loss = torch.tensor(0., device=self.device)
+                     if self.discrete_feat:
+@@ -613,13 +653,17 @@
+                             sample_idx, target_idx.item(), success, loss, feature_loss.item()
+                         ))
+ 
+-                self.optimizer.step()
++                if self.feat_override == 'none':
++                    self.optimizer.step()
+                 attack_results[target_index_idx.item()] = success
+                 sample_idx += 1
+ 
+             #  ------------------------ Evaluating ------------------------
+             success_rate, attack_results = evaluate_performance(model, self.generator, g, target_indexes,
+-                                                                self.khop_edge, attack_results, self.kappa, test_labels, self.device, num_succeed)
++                                                                self.khop_edge, attack_results, self.kappa, test_labels, self.device, num_succeed,
++                                                                feat_override=self.feat_override,
++                                                                normalize_override=(self.normalized and self.discrete_feat),
++                                                                node_budget=self.node_budget)
+         return success_rate, attack_results
+ 
+     def run_attack(self, model, g, target_indexes, test_labels=None, wandb_ins=None):
 --- GZOO-Official/models/utils.py	2026-04-02 08:59:39.917747791 +0000
 +++ GZOO-Working/models/utils.py	2026-09-30 04:56:57.946834664 +0000
 @@ -6,18 +6,15 @@

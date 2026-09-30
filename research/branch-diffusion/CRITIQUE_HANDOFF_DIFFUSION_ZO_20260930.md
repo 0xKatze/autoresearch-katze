@@ -197,7 +197,9 @@ GPU/訓練指令一律交給使用者手動啟動(專案慣例 + classifier 政�
 ### 前置判準 + V0-strict 部分結果(2026-09-30,secgnn/CPU,seed 1027,Cora+SGC)
 - **Trivial baseline(random_real,on-manifold 真實節點特徵,無優化)= 5.86% ASR**(deterministic:26 個 evaluate_performance 呼叫 × 3 epochs 全 5.86%,收斂確定值)。→ 節點分類下「1 注入節點 + 1 邊 + 中性真實特徵」幾乎不 flip(target 本來就有很多真鄰居,單一注入被稀釋)。
 - **success-inflation 是 epoch-0 transient,非收斂差(已修正先前過度宣稱)**:epoch 0 stock ~58% vs strict 6.98%(差 ~51pp)——但那是 generator **未訓練**時的假象(候選 σ-擾動偶有 flip,真實注入圖幾乎不 flip)。**generator 訓練後 strict 快速追上**:epoch 1 strict = **56.61%**。→ 真正的膨脹量 = stock final(73.57%)− strict final(待跑完),**遠小於 51pp**。§2 claim 6 仍成立(候選 verdict ≠ 真實 verdict),但收斂後幅度小得多;不可宣稱「73.57% 主要是膨脹」。final strict ASR pending(epoch 1/5,climbing)。
-- **[PENDING] 前置判準門檻**:strict-optimized(final) − trivial(5.86%)。若 <10pp → diffusion 線 moot。epoch-0 strict(6.98%)才比 trivial 高 1.1pp,但要等 final。
+- **前置判準結果(RESOLVED,決定性)**:strict-optimized **final = 74.44%**(5 epochs)。三數對比:trivial 5.86% / stock 73.57% / strict 74.44%。
+  - **(1) 收斂後 success-inflation ≈ 0**:strict 74.44% ≈ stock 73.57%(甚至 +0.87pp,因 strict 下 target 不被候選-flip 移除 → 多優化幾步)。epoch-0 的 51pp gap 收斂後**全部消失**。→ §2 claim 6 是真的 code smell 但**經驗上不膨脹最終數字**;**V0-strict 的價值 = 證明論文 ASR 沒被膨脹**(不是抓到膨脹)。
+  - **(2) 前置判準 PASS(門檻 10pp)**:**74.44 − 5.86 = 68.58pp ≫ 10pp**。→ 節點分類下 **feature 優化極度決定性**(與 graph-cls N23 相反,那裡 topology 主導、feature-diffusion 加 0)。→ **節點分類逃生口成立**:diffusion 先驗線在 node-cls **不 moot**,feature prior 有真實空間發揮。這正面回答 §1-D 的舉證責任 + advisor item 1。
 
 ### GPU 解鎖(advisor item 4,成功)
 原判「sm_120 → 只能 CPU」**已推翻**。GZOO 卡在 cu128 env 的唯一原因是 module-level `import torch_sparse`(需 torch_scatter),而用它的 `adj_to_tensor`/`tensor_to_adj` 是**死碼(全 repo 無呼叫)**。修法(都在 `GZOO-Working`,canonical 不動):

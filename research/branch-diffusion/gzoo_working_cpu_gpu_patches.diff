@@ -1,6 +1,6 @@
 # GZOO-Working patches vs canonical GZOO-Official (2026-09-30)
 # (a) CPU fallback, (b) cu128/sm_120 GPU via lazy pyg imports,
-# (c) --gzoo_strict_success (V0-strict), (d) --gzoo_feat_override {random_real,neighbor_copy,class_shift} (trivial baselines).
+# (c) --gzoo_strict_success (V0-strict), (d) --gzoo_feat_override {random_real,neighbor_copy,class_shift}.
 # Vendored working copy /workspace/reference/GZOO-Working — NOT added to the repo.
 
 --- GZOO-Official/main.py	2026-04-02 08:59:39.917747791 +0000

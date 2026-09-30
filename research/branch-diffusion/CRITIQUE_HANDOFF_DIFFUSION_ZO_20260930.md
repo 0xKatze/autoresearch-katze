@@ -199,7 +199,18 @@ GPU/訓練指令一律交給使用者手動啟動(專案慣例 + classifier 政�
 - **success-inflation 是 epoch-0 transient,非收斂差(已修正先前過度宣稱)**:epoch 0 stock ~58% vs strict 6.98%(差 ~51pp)——但那是 generator **未訓練**時的假象(候選 σ-擾動偶有 flip,真實注入圖幾乎不 flip)。**generator 訓練後 strict 快速追上**:epoch 1 strict = **56.61%**。→ 真正的膨脹量 = stock final(73.57%)− strict final(待跑完),**遠小於 51pp**。§2 claim 6 仍成立(候選 verdict ≠ 真實 verdict),但收斂後幅度小得多;不可宣稱「73.57% 主要是膨脹」。final strict ASR pending(epoch 1/5,climbing)。
 - **前置判準結果(RESOLVED,決定性)**:strict-optimized **final = 74.44%**(5 epochs)。三數對比:trivial 5.86% / stock 73.57% / strict 74.44%。
   - **(1) 收斂後 success-inflation ≈ 0**:strict 74.44% ≈ stock 73.57%(甚至 +0.87pp,因 strict 下 target 不被候選-flip 移除 → 多優化幾步)。epoch-0 的 51pp gap 收斂後**全部消失**。→ §2 claim 6 是真的 code smell 但**經驗上不膨脹最終數字**;**V0-strict 的價值 = 證明「我這一跑(README SGC config,單 seed/單資料集/單 victim)沒被膨脹」**——**不等於**論文 95.69% 沒被膨脹(那個 headline 我仍未重現,停在 73–74%)。
-  - **(2) 前置判準 vs random_real PASS,但需 class_shift 補強**:**74.44 − 5.86 = 68.58pp**。但 random_real 是**class-中性**特徵(=近 topology-only floor),所以這只證明「learned feature > 任意特徵」。真正要贏的競爭者是**便宜但對抗**的 baseline:**class_shift**(複製 target 第二名 class 的真實節點,1 次 clean query,零 ZO)。若 class_shift ≈ 60% → 68.58pp 是打稻草人,結論改成「feature *方向* 決定性、任何合理挑法都拿到大部分」。若 class_shift ≈ 15% → 結論成立且更強。**[執行中]**
+  - **(2) 前置判準 RESOLVED — PASS,且非稻草人**。四點對比(Cora+SGC,secgnn/CPU,seed 1027):
+
+    | baseline / method | ASR | 隔離出 |
+    |---|---|---|
+    | trivial random_real(class-中性) | 5.86% | ≈ topology-only floor |
+    | trivial class_shift(便宜對抗,零 ZO) | **21.32%** | feature *方向* |
+    | GZOO stock(候選 verdict) | 73.57% | learned ZO |
+    | **GZOO strict(learned ZO,真實 verdict)** | **74.44%** | learned feature 優化 |
+
+    - class_shift(21.32%)≫ random_real(5.86%):注入第二名 class 的真實節點確實推動 target(+15.5pp)→ feature **方向**有用。
+    - **strict(74.44%)− class_shift(21.32%)= 53.12pp ≫ 10pp**:learned ZO **優化**遠超便宜對抗挑法 → feature **優化本身**決定性,**不是稻草人**(advisor 說的「class_shift≈15% → 結論更強」那一支)。
+    - **結論**:節點分類下 learned feature 優化決定性(與 graph-cls N23 相反)。**diffusion 先驗線有真實空間**:目標高(~74%),而便宜的 on-manifold 挑法只到 21% → 一個能逼近 74% 又保持 on-manifold 的 learned prior 才是貢獻。§1-D 舉證責任 + advisor item 1 **正面達成**。
   - **(3) 修正 stack-sensitivity 因果**:68→74% 的 CPU/GPU 5pp gap **不是**候選-verdict 的 RNG(該機制收斂後淨效 ≈0),而是 **dgl 1.1↔2.4 / torch 2.0↔2.12 在優化過程的數值/RNG drift**。
 
 ### GPU 解鎖(advisor item 4,成功)

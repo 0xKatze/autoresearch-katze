@@ -213,6 +213,11 @@ GPU/訓練指令一律交給使用者手動啟動(專案慣例 + classifier 政�
     - **結論**:節點分類下 learned feature 優化決定性(與 graph-cls N23 相反)。**diffusion 先驗線有真實空間**:目標高(~74%),而便宜的 on-manifold 挑法只到 21% → 一個能逼近 74% 又保持 on-manifold 的 learned prior 才是貢獻。§1-D 舉證責任 + advisor item 1 **正面達成**。
   - **(3) 修正 stack-sensitivity 因果**:68→74% 的 CPU/GPU 5pp gap **不是**候選-verdict 的 RNG(該機制收斂後淨效 ≈0),而是 **dgl 1.1↔2.4 / torch 2.0↔2.12 在優化過程的數值/RNG drift**。
 
+### 下一階段 roadmap + 成本現實(advisor item 4)
+- **已完成(cheap,都在 Cora+SGC 單 seed)**:E0 重現、V0-strict、三個 trivial arms、GPU 解鎖。這些是**最後一批便宜實驗**。
+- **下一步(仍算 cheap,但需實作)**:E2 stealth 指標(homophily / ego-MMD / detector AUC)套在三個 arm(random_real / class_shift / GZOO-strict)上 → 得 (ASR, detectability) Pareto 點 → 才有 H1 的固定門檻。**需先存注入圖**(GZOO-strict 的 per-target generator 輸出目前沒存 → 要再一次 instrumented run)。
+- **成本斷崖**:strict-optimized 單 config(Cora+SGC,單 seed)CPU ~2h。handoff §7 的 E4–E7(4 資料集 × 4–9 victim × 5 seed × 6 query budget)= **數千 CPU-hours**。RTX 5080 是 sm_120,secgnn(faithful stack)只能 CPU;GPU 要用 graph_adversarial(數字與 secgnn 差 ~5pp,不可互比)。→ **E2 之後每一步都需要「GPU-env(接受數字不可比)」或「砍 scope」**,使用者需先選。
+
 ### GPU 解鎖(advisor item 4,成功)
 原判「sm_120 → 只能 CPU」**已推翻**。GZOO 卡在 cu128 env 的唯一原因是 module-level `import torch_sparse`(需 torch_scatter),而用它的 `adj_to_tensor`/`tensor_to_adj` 是**死碼(全 repo 無呼叫)**。修法(都在 `GZOO-Working`,canonical 不動):
 - `attack/utils.py`:torch_sparse + `scipy.sparse.csr` import 包 try/except(defensive)。
